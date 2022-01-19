@@ -18,78 +18,250 @@ import shutil
 import warnings
 from PIL import Image
 
+
+from ctypes import *
+from _ctypes import FreeLibrary
+
 # URL from which to download the latest COCO trained weights
 COCO_MODEL_URL = "https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5"
-EIGHT_BIT_MAX = 255
 SIXTEEN_BIT_MAX = 65535
 ############################################################
 #  Packaged Segmenter
 ############################################################
-def boost_image(image, boost_factor):
-    EIGHT_BIT_MAX = 255
 
-    max_mask = np.full(image.shape, EIGHT_BIT_MAX)
-    boosted = np.rint(np.minimum(
-        image * boost_factor, max_mask)).astype('uint8')
-    return skimage.img_as_ubyte(boosted)
+def drcu(image, drc0, drc1, drca):
+  assert(image.dtype == np.uint16)
+  assert(drc0 < 65534)
+  assert(drc1 > 65535)
+  
+  libSpaCE = CDLL('SpaCE.dll')
+  
+  c_drcu = libSpaCE.drcu
+  c_drcu.restype = None
+  c_drcu.argtypes = [POINTER(c_float), POINTER(c_ushort), c_size_t, c_float, c_float, c_float]
+  
+  img = np.ascontiguousarray(image)
+  out = np.ascontiguousarray(np.empty(img.shape, dtype=np.float32))
+  c_drcu(out.ctypes.data_as(POINTER(c_float)), img.ctypes.data_as(POINTER(c_ushort)), img.size, drc0, drc1, drca)
+  
+  FreeLibrary(libSpaCE._handle)
+  del libSpaCE
+  
+  return out
+  
+def dilate_masks(roilist, masklist, scorelist, r0=-1):
+  from skimage.morphology import disk
+  from scipy.ndimage.morphology import binary_dilation, binary_erosion
+  
+  r = int(r0)
+  roi_growth = np.array([-r,-r,r,r], dtype=np.int32)
+  
+  if r > 0: # dilate
+    r = min(r, 4)
+    print('Dilating cell masks by {} pixels'.format(r0))
+    if abs(r-r0) > 0.4:
+      s = binary_dilation(np.pad(disk(r-1), 1, mode='constant'), np.ones([3,3]))
+    else:
+      s = disk(r)
+    for L, (rois, masks, scores) in enumerate(zip(roilist, masklist, scorelist)):
+      th = h//rows + (cf.OVERLAP//2 if (L//cols) in [0,rows-1] else cf.OVERLAP)
+      tw = w//cols + (cf.OVERLAP//2 if (L %cols) in [0,cols-1] else cf.OVERLAP)
+      
+      for i in range(len(masks)):
+        rois[i] += roi_growth
+        
+        padded = np.pad(masks[i], r, mode='constant')
+        maskb  = padded.astype(np.bool)
+        
+        dilated = binary_dilation(maskb, s)
+        avg = np.sum(padded) / np.sum(maskb)
+        v = min(avg, scores[i]) * 0.5
+        masks[i] = np.maximum(padded, v) * dilated
+        
+        # check for out of bounds masks
+        if rois[i][0]<0 or rois[i][1]<0 or rois[i][2]>th or rois[i][3]>tw:
+          y1, x1 = max(rois[i][0], 0), max(rois[i][1], 0)
+          y2, x2 = min(rois[i][2],th), min(rois[i][3],tw)
+          
+          masks[i] = masks[i][y1-rois[i][0]:padded.shape[0] + y2-rois[i][2], x1-rois[i][1]:padded.shape[1] + x2-rois[i][3]]
+          rois[i] = [y1, x1, y2, x2]
+        
+        assert(masks[i].shape == (rois[i][2]-rois[i][0],rois[i][3]-rois[i][1]))
+  
+  elif r < 0: # erode
+    print('Eroding cell masks by {} pixels'.format(r0))
+    if abs(r-r0) > 0.4:
+      s = binary_dilation(np.pad(disk(-r-1), 1, mode='constant'), np.ones([3,3]))
+    else:
+      s = disk(-r)
+    for L, (rois, masks, scores) in enumerate(zip(roilist, masklist, scorelist)):
+      remove = []
+      for i in range(len(masks)):
+        roi = rois[i] + roi_growth
+        if roi[2] > roi[0] and roi[3] > roi[1]:
+          rois[i] = roi
+          eroded = binary_erosion(masks[i], s)
+          masks[i] = (masks[i] * eroded)[-r:r,-r:r]
+          
+          assert(masks[i].dtype == np.float32)
+          assert(masks[i].shape == (roi[2]-roi[0],roi[3]-roi[1]))
+          
+        else:
+          remove.append(i)
+      
+      roilist[L]   = np.delete(rois, remove, axis=0)
+      scorelist[L] = np.delete(scores, remove, axis=0)
+      
+      for i in reversed(remove): del masks[i]
+      
+      assert(len(roilist[L]) == len(masklist[L]) == len(scorelist[L]))
+  
+def boost_image(image, boost_factor):
+  max_mask = np.full(image.shape, 255)
+  boosted = np.rint(np.minimum(image * boost_factor, max_mask)).astype('uint8')
+  return skimage.img_as_ubyte(boosted)
 
 def get_channel_index(text, channel_names):
-    if text not in channel_names:
-        raise NameError('Couldn\'t find {} channel'.format(text))
-
-    return np.where(channel_names == text)[0][0]
+  if text not in channel_names:
+    raise NameError('Couldn\'t find {} channel'.format(text))
+  
+  return np.where(channel_names == text)[0][0]
 
 def extract_tile_information(filename):
+  if filename.endswith('.tif'):
     try:
-        name = filename.split('.')[0]
-        comps = name.split('_')
-        reg = int(comps[0][3:])
-        X = int(comps[1][1:])
-        Y = int(comps[2][1:])
-        Z = int(comps[3][1:])
+      name = filename.split('.')[0]
+      comps = name.split('_')
+      reg = int(comps[0][3:])
+      X = int(comps[1][1:])
+      Y = int(comps[2][1:])
+      Z = int(comps[3][1:])
 
-        return reg, Y, X, Z
+      return reg, Y, X, Z
     except:
-        raise NameError('Looks like at least one filename is not in the right format.  CODEX filenames look like \'reg002_X02_Y04_Z08.tif\'')
+      raise NameError('Looks like at least one filename is not in the right format.  CODEX filenames look like \'reg002_X02_Y04_Z08.tif\'')
+  
+  else:
+    try:
+      comps = filename.split('_')
+      reg = int(comps[0][3:])
+      X = int(comps[1][1:])
+      Y = int(comps[2][1:])
+      Z = 6
+      
+      return reg, Y, X, Z
+    except:
+      raise NameError('Looks like at least one folder name is not in the right format.  CODEX folders look like \'reg002_X02_Y04\'')
+
+def extract_stitched_information(filename):
+  try:
+    name = filename.split('.')[0]
+    comps = name.split('_')
+    reg = int(comps[1][6:])
+    Z   = int(comps[2][1:])
+    
+    return reg, Z
+  except:
+    raise NameError('Looks like at least one filename is not in the expected format.  Stitched mosaics look like \'mosaic_region2_z06_cy05_ch03.tif\'')
+
 
 # Assumes 2 or 3 dims
-def get_nuclear_image(n_dims, image, nuclear_index=None):
+def get_nuclear_image(image, nuclear_index=0):
+  if image.ndim == 3:
+    nuclear_image = np.expand_dims(skimage.img_as_ubyte(image[:,:,nuclear_index]), axis=2)
+  else:
     nuclear_image = skimage.img_as_ubyte(image)
-
-    if n_dims == 3:
-        if nuclear_index:
-            nuclear_image = np.expand_dims(nuclear_image[:, :, nuclear_index], axis=2)
-            print(nuclear_image.shape)
-        else:
-            if image.shape[2] == 3:
-                return image
-
-    nuclear_image = nuclear_image[:, :, [0, 0, 0]]
-    return nuclear_image
+  
+  nuclear_image = nuclear_image[:, :, [0,0,0]]
+  return nuclear_image
+  
+  
+def tiles_folder_read_method(folder, load=True, filter=None):
+  filter = filter or (lambda *_: True)
+  
+  if folder.endswith('.tif'):
+    folder, fname = os.path.split(folder)
+    prefix = fname[0:15]
+    files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and f.startswith(prefix) and filter(f)])
+  else:
+    files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and not f.startswith('.') and filter(f)])
+  
+  #files = files[:2]
+  
+  print('Loading {} images:'.format(len(files)))
+  print('  {}'.format(files[0]))
+  
+  first = np.array(skimage.external.tifffile.imread(os.path.join(folder, files[0])))
+  
+  stack = np.empty(first.shape[:2] + (len(files),), dtype=first.dtype)
+  if load:
+    stack[:,:,0] = first
+    for c, fname in enumerate(files[1:],1):
+      print('  {}'.format(fname))
+      stack[:,:,c] = np.array(skimage.external.tifffile.imread(os.path.join(folder, fname)))
+  print()
+  
+  def crop_mosaic(imgstack, gy=None, gx=None):
+    # trim the mosaic so the output tiles are an equal and even size (w and h are a multiple of 2)
     
-
-def meta_from_image(filename):
-    # get shape, file_ext, 8 vs 16 bit, boost,
-
+    hc, wc = imgstack.shape[0:2]    
+     
+    if gy is None: gy = int(hc // 1008)
+    if gx is None: gx = int(wc // 1344)
+    
+    th, tw = hc//gy, wc//gx
+    htrim, wtrim = th*gy, tw*gx
+    
+    while(htrim % (gy*2)):
+      th = htrim//gy
+      htrim -= 1
+    
+    while(wtrim % (gx*2)):
+      tw = wtrim//gx
+      wtrim -= 1
+    
+    top  = (hc - th*gy) // 2; bottom = top  + th*gy
+    left = (wc - tw*gx) // 2; right  = left + tw*gx
+    
+    return imgstack[top:bottom,left:right,:]
+  
+  print(stack.shape)
+  stack = crop_mosaic(stack)
+  print(stack.shape)
+  
+  #stack = stack[1000:2000,1000:2000,:]
+  
+  return stack
+  
+  
+def meta_from_image(filename, filter=None):
+  # get shape, file_ext, 8 vs 16 bit, boost,
+  
+  path = os.path.normpath(filename).replace('\\','/')
+  if '/tiles/' in path or '/stitched/' in path:
+    ext = 'tif'
+    read_method = lambda f, **kw: tiles_folder_read_method(f, **kw, filter=filter)
+    image = np.array(read_method(filename, load=False))
+  else:
     ext = filename[-3:]
     read_method = skimage.external.tifffile.imread if ext == 'tif' else Image.open
     image = np.array(read_method(filename))
-
-    shape = image.shape
-    n_dims = len(shape)
-        
-    if n_dims > 4 or n_dims < 2:
-        raise ValueError('Invalid image dimensions.  CellVision supports 4D cycle, 3D, and 2D images.')
-
-    if n_dims == 4:
-        # Convert to 3D with channels in back
-        shape = (shape[2], shape[3], shape[0] * shape[1])
-    
-    if n_dims == 2:
-        shape = (shape[0], shape[1], 1)
-    
-    dtype = image.dtype
-    return n_dims, ext, dtype, shape, read_method
+  
+  shape = image.shape
+  n_dims = len(shape)
+  
+  if n_dims > 4 or n_dims < 2:
+    raise ValueError('Invalid image dimensions.  CellVision supports 4D cycle, 3D, and 2D images.')
+  
+  if n_dims == 4:
+    # Convert to 3D with channels in back
+    shape = (shape[2], shape[3], shape[0] * shape[1])
+  
+  if n_dims == 2:
+    shape = (shape[0], shape[1], 1)
+  
+  dtype = image.dtype
+  return n_dims, ext, dtype, shape, read_method
 ############################################################
 #  Bounding Boxes
 ############################################################
@@ -664,12 +836,29 @@ def unmold_mask(mask, bbox, image_shape):
     y1, x1, y2, x2 = bbox
     mask = skimage.transform.resize(mask, (y2 - y1, x2 - x1), order=1, mode="constant")
     mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
-
+    
     # Put the mask in the right location.
     full_mask = np.zeros(image_shape[:2], dtype=np.bool)
     full_mask[y1:y2, x1:x2] = mask
     return full_mask
 
+
+def unmold_mask_small(mask, bbox, image_shape):
+  """Converts a mask generated by the neural network to a format similar
+  to its original shape.
+  mask: [height, width] of type float. A small, typically 28x28 mask.
+  bbox: [y1, x1, y2, x2]. The box to fit the mask in.
+
+  Returns a grayscale mask where 
+  """
+  threshold = 0.5
+  y1, x1, y2, x2 = bbox
+  mask = skimage.transform.resize(mask, (y2 - y1, x2 - x1), order=1, mode='constant')
+  #mask = np.where(mask >= threshold, 1, 0).astype(np.bool)
+  #mask = np.where(mask >= threshold, mask * 509.999 - 253.999, 0).astype(np.uint8)
+  mask[mask < threshold] = 0
+  
+  return mask.astype(np.float32)
 
 ############################################################
 #  Anchors
