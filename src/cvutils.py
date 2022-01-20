@@ -48,8 +48,8 @@ def drcu(image, drc0, drc1, drca):
   del libSpaCE
   
   return out
-  
-def dilate_masks(roilist, masklist, scorelist, r0=-1):
+
+def dilate_masks(roilist, masklist, scorelist, h, w, rows, cols, overlap, r0=1):
   from skimage.morphology import disk
   from scipy.ndimage.morphology import binary_dilation, binary_erosion
   
@@ -57,18 +57,17 @@ def dilate_masks(roilist, masklist, scorelist, r0=-1):
   roi_growth = np.array([-r,-r,r,r], dtype=np.int32)
   
   if r > 0: # dilate
-    r = min(r, 4)
     print('Dilating cell masks by {} pixels'.format(r0))
     if abs(r-r0) > 0.4:
       s = binary_dilation(np.pad(disk(r-1), 1, mode='constant'), np.ones([3,3]))
     else:
       s = disk(r)
     for L, (rois, masks, scores) in enumerate(zip(roilist, masklist, scorelist)):
-      th = h//rows + (cf.OVERLAP//2 if (L//cols) in [0,rows-1] else cf.OVERLAP)
-      tw = w//cols + (cf.OVERLAP//2 if (L %cols) in [0,cols-1] else cf.OVERLAP)
+      th = (h//rows + (cf.OVERLAP//2 if (L//cols) in [0,rows-1] else cf.OVERLAP)) if rows > 1 else h
+      tw = (w//cols + (cf.OVERLAP//2 if (L %cols) in [0,cols-1] else cf.OVERLAP)) if cols > 1 else w
       
       for i in range(len(masks)):
-        rois[i] += roi_growth
+        roilist[L][i] += roi_growth
         
         padded = np.pad(masks[i], r, mode='constant')
         maskb  = padded.astype(np.bool)
@@ -76,15 +75,15 @@ def dilate_masks(roilist, masklist, scorelist, r0=-1):
         dilated = binary_dilation(maskb, s)
         avg = np.sum(padded) / np.sum(maskb)
         v = min(avg, scores[i]) * 0.5
-        masks[i] = np.maximum(padded, v) * dilated
+        masklist[L][i] = np.maximum(padded, v) * dilated
         
         # check for out of bounds masks
         if rois[i][0]<0 or rois[i][1]<0 or rois[i][2]>th or rois[i][3]>tw:
           y1, x1 = max(rois[i][0], 0), max(rois[i][1], 0)
           y2, x2 = min(rois[i][2],th), min(rois[i][3],tw)
           
-          masks[i] = masks[i][y1-rois[i][0]:padded.shape[0] + y2-rois[i][2], x1-rois[i][1]:padded.shape[1] + x2-rois[i][3]]
-          rois[i] = [y1, x1, y2, x2]
+          masklist[L][i] = masks[i][y1-rois[i][0]:padded.shape[0] + y2-rois[i][2], x1-rois[i][1]:padded.shape[1] + x2-rois[i][3]]
+          roilist[L][i] = [y1, x1, y2, x2]
         
         assert(masks[i].shape == (rois[i][2]-rois[i][0],rois[i][3]-rois[i][1]))
   
@@ -147,23 +146,33 @@ def extract_tile_information(filename):
       reg = int(comps[0][3:])
       X = int(comps[1][1:])
       Y = int(comps[2][1:])
-      Z = 6
+      Z = 0
       
       return reg, Y, X, Z
     except:
       raise NameError('Looks like at least one folder name is not in the right format.  CODEX folders look like \'reg002_X02_Y04\'')
 
 def extract_stitched_information(filename):
-  try:
-    name = filename.split('.')[0]
-    comps = name.split('_')
-    reg = int(comps[1][6:])
-    Z   = int(comps[2][1:])
+  if '_z' in filename.lower():
+    try:
+      name = filename.split('.')[0]
+      comps = name.split('_')
+      reg = int(comps[1][6:])
+      Z   = int(comps[2][1:])
     
-    return reg, Z
-  except:
-    raise NameError('Looks like at least one filename is not in the expected format.  Stitched mosaics look like \'mosaic_region2_z06_cy05_ch03.tif\'')
-
+      return reg, Z
+    except:
+      raise NameError('Looks like at least one filename is not in the expected format.  Stitched mosaics look like \'mosaic_region002_z06_cy05_ch03.tif\'')
+      
+  else: # no z-coordinate
+    try:
+      name = filename.split('.')[0]
+      comps = name.split('_')
+      reg = int(comps[1][6:])
+      
+      return reg, 0
+    except:
+      raise NameError('Looks like at least one filename is not in the expected format.  Stitched mosaics look like \'mosaic_region2_ch03.tif\'')
 
 # Assumes 2 or 3 dims
 def get_nuclear_image(image, nuclear_index=0):
@@ -176,29 +185,27 @@ def get_nuclear_image(image, nuclear_index=0):
   return nuclear_image
   
   
-def tiles_folder_read_method(folder, load=True, filter=None):
+def stitched_folder_read_method(folder, load=True, filter=None):
   filter = filter or (lambda *_: True)
   
   if folder.endswith('.tif'):
     folder, fname = os.path.split(folder)
-    prefix = fname[0:15]
+    prefix = fname[0:17]
     files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and f.startswith(prefix) and filter(f)])
   else:
     files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and not f.startswith('.') and filter(f)])
-  
-  #files = files[:2]
-  
+
   print('Loading {} images:'.format(len(files)))
   print('  {}'.format(files[0]))
   
-  first = np.array(skimage.external.tifffile.imread(os.path.join(folder, files[0])))
+  first = np.array(skimage.io.imread(os.path.join(folder, files[0])))
   
-  stack = np.empty(first.shape[:2] + (len(files),), dtype=first.dtype)
+  stack = np.empty(first.shape[0:2] + (len(files),), dtype=first.dtype)
   if load:
     stack[:,:,0] = first
     for c, fname in enumerate(files[1:],1):
       print('  {}'.format(fname))
-      stack[:,:,c] = np.array(skimage.external.tifffile.imread(os.path.join(folder, fname)))
+      stack[:,:,c] = np.array(skimage.io.imread(os.path.join(folder, fname)))
   print()
   
   def crop_mosaic(imgstack, gy=None, gx=None):
@@ -225,26 +232,73 @@ def tiles_folder_read_method(folder, load=True, filter=None):
     
     return imgstack[top:bottom,left:right,:]
   
-  print(stack.shape)
+  print('  input shape:', stack.shape)
   stack = crop_mosaic(stack)
-  print(stack.shape)
+  print('cropped shape:', stack.shape)
+  print()
   
   #stack = stack[1000:2000,1000:2000,:]
   
   return stack
   
+def tiles_folder_read_method(folder, load=True, filter=None):
+  filter = filter or (lambda *_: True)
   
+  single_files = sorted([f for f in os.listdir(folder) if not f.startswith('.') and filter(f)])
+  first = np.array(skimage.io.imread(os.path.join(folder, single_files[0])))
+  
+  folder, fname = os.path.split(folder)
+  prefix = fname[0:7]
+  print('prefix ', prefix)
+  
+  tile_dirs = sorted([f.name for f in os.scandir(folder) if f.name.startswith(prefix) and f.is_dir()])
+  
+  # reg001_X01_Y01
+  xs = set([int(d[8:10]) for d in tile_dirs])
+  ys = set([int(d[12:14]) for d in tile_dirs])
+  
+  print('Loading {} images:'.format(len(tile_dirs) * len(single_files)))
+  print('  {}'.format(single_files[0]))
+  
+  stack = np.empty((len(ys), len(xs),) + first.shape[0:2] + (len(single_files),), dtype=first.dtype)
+  if load:
+    for d in tile_dirs:
+      x = int(d[8:10])
+      y = int(d[12:14])
+      
+      files = sorted([f for f in os.listdir(os.path.join(folder, d)) if not f.startswith('.') and filter(f)])
+      for c, f in enumerate(files):
+        fname = os.path.join(d, f)
+        if c==0: print('  {}'.format(fname))
+        stack[y-1,x-1,:,:,c] = np.array(skimage.external.tifffile.imread(os.path.join(folder, fname)))
+  print()
+  
+  hc = stack.shape[0] * stack.shape[2]
+  wc = stack.shape[1] * stack.shape[3]
+  
+  print(stack.shape)
+  stack = stack.swapaxes(1,2).reshape(hc, wc, -1)
+  print(stack.shape)
+  
+  #stack = stack[1000:2000,1000:2000,:]
+  
+  return stack
+
 def meta_from_image(filename, filter=None):
   # get shape, file_ext, 8 vs 16 bit, boost,
   
   path = os.path.normpath(filename).replace('\\','/')
-  if '/tiles/' in path or '/stitched/' in path:
+  if '/stitched/' in path:
+    ext = 'tif'
+    read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
+    image = np.array(read_method(filename, load=False))
+  elif '/tiles/' in path:
     ext = 'tif'
     read_method = lambda f, **kw: tiles_folder_read_method(f, **kw, filter=filter)
     image = np.array(read_method(filename, load=False))
   else:
     ext = filename[-3:]
-    read_method = skimage.external.tifffile.imread if ext == 'tif' else Image.open
+    read_method = skimage.io.imread
     image = np.array(read_method(filename))
   
   shape = image.shape
@@ -253,8 +307,7 @@ def meta_from_image(filename, filter=None):
   if n_dims > 4 or n_dims < 2:
     raise ValueError('Invalid image dimensions.  CellVision supports 4D cycle, 3D, and 2D images.')
   
-  if n_dims == 4:
-    # Convert to 3D with channels in back
+  if n_dims == 4: # Convert to 3D with channels in back
     shape = (shape[2], shape[3], shape[0] * shape[1])
   
   if n_dims == 2:
@@ -262,6 +315,7 @@ def meta_from_image(filename, filter=None):
   
   dtype = image.dtype
   return n_dims, ext, dtype, shape, read_method
+
 ############################################################
 #  Bounding Boxes
 ############################################################
@@ -292,7 +346,7 @@ def extract_bboxes(mask):
     return boxes.astype(np.int32)
 
 
-def compute_iou(box, boxes, box_area, boxes_area):
+def my_compute_iou(box, boxes, box_area, boxes_area):
     """Calculates IoU of the given box with the array of the given boxes.
     box: 1D vector [y1, x1, y2, x2]
     boxes: [boxes_count, (y1, x1, y2, x2)]
@@ -328,7 +382,7 @@ def compute_overlaps(boxes1, boxes2):
     overlaps = np.zeros((boxes1.shape[0], boxes2.shape[0]))
     for i in range(overlaps.shape[1]):
         box2 = boxes2[i]
-        overlaps[:, i] = compute_iou(box2, boxes1, area2[i], area1)
+        overlaps[:, i] = my_compute_iou(box2, boxes1, area2[i], area1)
     return overlaps
 
 
@@ -380,7 +434,7 @@ def non_max_suppression(boxes, scores, threshold):
         i = ixs[0]
         pick.append(i)
         # Compute IoU of the picked box with the rest
-        iou = compute_iou(boxes[i], boxes[ixs[1:]], area[i], area[ixs[1:]])
+        iou = my_compute_iou(boxes[i], boxes[ixs[1:]], area[i], area[ixs[1:]])
         # Identify boxes with IoU over the threshold. This
         # returns indicies into ixs[1:], so add 1 to get
         # indicies into ixs.

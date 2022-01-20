@@ -45,19 +45,21 @@ class CVConfig():
     NUCLEAR_CHANNEL_NAME = 'DRAQ5'
     NUCLEAR_CYCLE = 18
     NUCLEAR_CHANNEL = 4
-    NUCLEAR_SLICE = 0
-    GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks (don't use)
-    GROWTH_PIXELS_PLANE = 0 # erode or dilate cells on the plane_mask (don't use)
-    GROWTH_PIXELS_QUANT = 2.5 # dilate cells during quantification [0,1,1.5,2,2.5, ...]
-    BORDER_PIXELS_QUANT = 2.0 # thickness of border during quantification [1,1.5,2,2.5, ...]
-    OUTPUT_METHOD = 'all' # 'visual_image_output'
+    NUCLEAR_SLICE = 3
+    GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks [0,1,1.5,2,...] or negative
+    GROWTH_PIXELS_PLANE = 0 # dilate cells on the plane_mask [0,1,1.5,2,2.5, ...]
+    GROWTH_PIXELS_QUANT_A = 0 # dilate cells during adjacency quantification [0,1,1.5,2,2.5, ...]
+    GROWTH_PIXELS_QUANT_M = 2.5 # dilate cells during morphological quantification [0,0.5,1,1.5,2,2.5, ...]
+    BORDER_PIXELS_QUANT_M = 2.0 # thickness of border during morphological quantification [1,1.5,2,2.5, ...]
+    output_adjacency_quant = True
+    output_morphological_quant = True
+    OUTPUT_METHOD = 'all'
     BOOST = 1
     FILENAME_ENDS_TO_EXCLUDE = ('.backup')
     
     OVERLAP = 80
     MIN_AREA = 20
     INCREASE_FACTOR = 3.5
-    AUTOBOOST_PERCENTILE = 99.98
     
     # Usually not changed
     root = os.path.dirname(os.path.realpath(__file__))
@@ -66,11 +68,12 @@ class CVConfig():
 
     
     # Probably don't change this, except the valid image extensions when working with unique extensions.
-    def __init__(self, input_path, increase_factor=None, growth_masks=None, growth_quant=None, growth_border=None, NUCLEAR_CYCLE=NUCLEAR_CYCLE, NUCLEAR_CHANNEL=NUCLEAR_CHANNEL, NUCLEAR_SLICE=NUCLEAR_SLICE):
-      if increase_factor: self.INCREASE_FACTOR = increase_factor
-      if growth_masks: self.GROWTH_PIXELS_MASKS = growth_masks
-      if growth_quant: self.GROWTH_PIXELS_QUANT = growth_quant
-      if growth_border: self.BORDER_PIXELS_QUANT = growth_border
+    def __init__(self, input_path, increase_factor=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None, NUCLEAR_CYCLE=NUCLEAR_CYCLE, NUCLEAR_CHANNEL=NUCLEAR_CHANNEL, NUCLEAR_SLICE=NUCLEAR_SLICE):
+      if increase_factor is not None: self.INCREASE_FACTOR = increase_factor
+      if growth_plane is not None: self.GROWTH_PIXELS_PLANE = growth_plane
+      if growth_quant_A is not None: self.GROWTH_PIXELS_QUANT_A = growth_quant_A
+      if growth_quant_M is not None: self.GROWTH_PIXELS_QUANT_M = growth_quant_M
+      if border_quant_M is not None: self.BORDER_PIXELS_QUANT_M = border_quant_M
       
       if not os.path.exists(input_path):
         raise NameError("Error: input directory '{}' doesn't exist!".format(input_path))
@@ -78,19 +81,21 @@ class CVConfig():
       output_path = os.path.join(input_path, 'processed/segm/segm-1')
       
       self.DIRECTORY_PATH = os.path.join(input_path, 'stitched')
-      self.CHANNEL_PATH = os.path.join(input_path, 'channelNames.txt')
+      self.CHANNEL_PATH = os.path.join(input_path, 'channelnames.txt')
       
       self.IMAGEJ_OUTPUT_PATH = os.path.join(output_path, 'imagej_files')
       self.QUANTIFICATION_OUTPUT_PATH = os.path.join(output_path, 'fcs')
       self.VISUAL_OUTPUT_PATH = os.path.join(output_path, 'masks')
       
-      try:
-        os.makedirs(self.IMAGEJ_OUTPUT_PATH)
-        os.makedirs(self.QUANTIFICATION_OUTPUT_PATH + '/uncompensated') # tight
-        os.makedirs(self.QUANTIFICATION_OUTPUT_PATH + '/compensated')   # loose
-        os.makedirs(self.VISUAL_OUTPUT_PATH)
-      except FileExistsError:
-        print("Output directory already exists")
+      def trymakedirs(d):                                                         
+        if not os.path.exists(d): os.makedirs(d)
+        
+      trymakedirs(self.IMAGEJ_OUTPUT_PATH)
+      trymakedirs(self.QUANTIFICATION_OUTPUT_PATH + '/uncompensated')
+      trymakedirs(self.QUANTIFICATION_OUTPUT_PATH + '/compensated')
+      trymakedirs(self.QUANTIFICATION_OUTPUT_PATH + '/tight')
+      trymakedirs(self.QUANTIFICATION_OUTPUT_PATH + '/loose')
+      trymakedirs(self.VISUAL_OUTPUT_PATH)
       
       filename_filter = lambda filename: 'z{:02d}'.format(NUCLEAR_SLICE) in filename
       
@@ -100,6 +105,8 @@ class CVConfig():
       self.FILENAMES = sorted([f for f in os.listdir(self.DIRECTORY_PATH) if f.endswith(VALID_IMAGE_EXTENSIONS) and not f.startswith('.')])
       if len(self.FILENAMES) < 1:
         raise NameError("No image files found.  Make sure you are pointing to the right directory '{}'".format(self.DIRECTORY_PATH))
+      for f in self.FILENAMES:
+        print(f)
       
       reference_image_path = os.path.join(self.DIRECTORY_PATH, self.FILENAMES[0])
       
