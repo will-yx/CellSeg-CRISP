@@ -234,7 +234,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         
         areas, means_u, means_c = stitched_mask.quantify_channels_adjacency(image, cf.GROWTH_PIXELS_QUANT_A, grow_neighbors=False, normalize=True)
         
-        print('Quantify cells across channels: {:.1f}s'.format(timer()-t0)); t0=timer()
+        print('Quantify cells across channels (adjacency): {:.1f}s'.format(timer()-t0)); t0=timer()
         
         metadata_list = np.array([reg, 1])
         metadata = np.column_stack([np.arange(1,1+n), np.broadcast_to(metadata_list, (n, len(metadata_list)))])
@@ -266,14 +266,14 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'uncompensated', outname + '_uncompensated.fcs'), data_u, cols, split=':')
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH,   'compensated', outname +   '_compensated.fcs'), data_c, cols, split=':')
         
-        print('Save measurements to csv: {:.1f}s'.format(timer()-t0)); t0=timer()
+        print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
       
       if cf.output_morphological_quant:
         t0 = timer()
         
         QL, QT = stitched_mask.quantify_channels_morphological(image, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
         
-        print('Quantify cells across channels: {:.1f}s'.format(timer()-t0)); t0=timer()
+        print('Quantify cells across channels (morphological): {:.1f}s'.format(timer()-t0)); t0=timer()
         
         metadata_list = np.array([reg, 1])
         metadata = np.column_stack([np.arange(1,1+n), np.broadcast_to(metadata_list, (n, len(metadata_list)))])
@@ -319,6 +319,8 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'loose', outname + '_loose.fcs'), data_L_f, cols_f, split=':')
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'tight', outname + '_tight.fcs'), data_T_f, cols_f, split=':')
+        
+        print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
     
     print('Total processing time for file {}: {:.1f}m'.format(filename, (timer()-t0_file) / 60));
 
