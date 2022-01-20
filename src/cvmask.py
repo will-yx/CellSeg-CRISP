@@ -258,18 +258,20 @@ class CVMask():
       
       print('Quantifying {} cells across {} channels'.format(n, n_channels))
       
-      
-      loose_full_mask = np.zeros([h,w], dtype=np.uint8)
-      loose_interior_mask = np.zeros([h,w], dtype=np.uint8)
-      loose_border_mask = np.zeros([h,w], dtype=np.uint8)
-      
-      tight_full_mask = np.zeros([h,w], dtype=np.uint8)
-      tight_interior_mask = np.zeros([h,w], dtype=np.uint8)
-      tight_border_mask = np.zeros([h,w], dtype=np.uint8)
-      
-      tight_full_labeled = np.zeros([h,w], dtype=np.uint32)
-      tight_interior_labeled = np.zeros([h,w], dtype=np.uint32)
-      tight_border_labeled = np.zeros([h,w], dtype=np.uint32)
+      if 0: # debug output
+        loose_full_mask = np.zeros([h,w], dtype=np.uint8)
+        loose_interior_mask = np.zeros([h,w], dtype=np.uint8)
+        loose_border_mask = np.zeros([h,w], dtype=np.uint8)
+        
+        tight_full_mask = np.zeros([h,w], dtype=np.uint8)
+        tight_interior_mask = np.zeros([h,w], dtype=np.uint8)
+        tight_border_mask = np.zeros([h,w], dtype=np.uint8)
+        
+        tight_full_labeled = np.zeros([h,w], dtype=np.uint32)
+        tight_interior_labeled = np.zeros([h,w], dtype=np.uint32)
+        tight_border_labeled = np.zeros([h,w], dtype=np.uint32)
+      else:
+        loose_full_mask = tight_full_mask = tight_full_labeled = None
       
       areas = np.zeros(n)
       
@@ -328,7 +330,7 @@ class CVMask():
       
       from timeit import default_timer as timer
       t0 = timer()
-
+      
       shown = 0
       for idx in range(n):
         if idx % 100 == 0: update_progress(idx / n)
@@ -364,6 +366,7 @@ class CVMask():
         border_loose = full_loose * (1-interior_loose)
         border_tight = full_tight * (1-interior_tight)
         
+        '''
         if np.count_nonzero(neighbor_mask) > 50 and False:
           print('cell index: {}'.format(idx))
           bottomleftplot = cellmask * (1-neighbors_tight) + (1-cellmask) * dilated * (1-neighbors_tight) * 3 + cellmask * neighbors_tight * 2
@@ -379,6 +382,7 @@ class CVMask():
           shown += 1
           if shown > 10:
             asdfasdf
+        '''
         
         def quantify_mask(q_mask, q_areas, q_means):
           coords = np.where(q_mask)
@@ -394,35 +398,39 @@ class CVMask():
         quantify_mask(interior_tight, tight_interior_areas, tight_interior_means)
         quantify_mask(border_tight, tight_border_areas, tight_border_means)
         
-        
-        def update_mask(q_mask, u_mask):
-          coords = np.where(q_mask)
-          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-          if len(coords): u_mask[coords[:,0],coords[:,1]] += 1
+        '''
+        # debug output
+        if loose_full_mask and tight_full_mask:
+          def update_mask(q_mask, u_mask):
+            coords = np.where(q_mask)
+            coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
+            if len(coords): u_mask[coords[:,0],coords[:,1]] += 1
+            
+          update_mask(full_loose, loose_full_mask)
+          update_mask(interior_loose, loose_interior_mask)
+          update_mask(border_loose, loose_border_mask)
           
-        update_mask(full_loose, loose_full_mask)
-        update_mask(interior_loose, loose_interior_mask)
-        update_mask(border_loose, loose_border_mask)
+          update_mask(full_tight,  tight_full_mask)
+          update_mask(interior_tight, tight_interior_mask)
+          update_mask(border_tight, tight_border_mask)
         
-        update_mask(full_tight,  tight_full_mask)
-        update_mask(interior_tight, tight_interior_mask)
-        update_mask(border_tight, tight_border_mask)
-        
-        def label_mask(q_mask, u_mask):
-          coords = np.where(q_mask)
-          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-          if len(coords): u_mask[coords[:,0],coords[:,1]] = id
-        
-        label_mask(full_tight,  tight_full_labeled)
-        label_mask(interior_tight, tight_interior_labeled)
-        label_mask(border_tight, tight_border_labeled)
+        if tight_full_labeled:
+          def label_mask(q_mask, u_mask):
+            coords = np.where(q_mask)
+            coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
+            if len(coords): u_mask[coords[:,0],coords[:,1]] = id
+          
+          label_mask(full_tight,  tight_full_labeled)
+          label_mask(interior_tight, tight_interior_labeled)
+          label_mask(border_tight, tight_border_labeled)
+        '''
         
       
       update_progress(1)
       
       print('  Compute morphological channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
       
-      if 0:
+      if 0: # debug output
         from PIL import Image
         path = 'N:/CellVision_interior_vs_border_masks/8.4/'
         #path = 'N:/CellVision_interior_vs_border_masks/19.1/'
