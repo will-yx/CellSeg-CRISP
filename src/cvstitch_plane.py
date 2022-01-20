@@ -418,8 +418,8 @@ class CVMaskStitcher():
       j = ti // ncols
       i = ti  % ncols
       
-      th = crop_height + (self.overlap//2 if j in [0,nrows-1] else self.overlap)
-      tw = crop_width  + (self.overlap//2 if i in [0,ncols-1] else self.overlap)
+      th = (crop_height + (self.overlap//2 if j in [0,nrows-1] else self.overlap)) if nrows > 1 else height
+      tw = (crop_width  + (self.overlap//2 if i in [0,ncols-1] else self.overlap)) if ncols > 1 else width
       
       tile, t_areas, t_scores = self.rois_to_plane_mask(roilist[ti], masklist[ti], scorelist[ti], cumulative, th, tw)
       

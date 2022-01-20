@@ -63,7 +63,9 @@ def random_colors_255(N, bright=False):
   To get visually distinct colors, generate them in HSV space then
   convert to RGB.
   """
-  if bright:
+  if N <= 0: return []
+  
+  if bright or N < 36:
     hsv = [(i / N, 1, 1) for i in range(N)]
   else:
     hsv = [((i//36) / (N//36), 1 - (0.1*(i%6)), 1 - 0.1*((i//6)%6)) for i in range(N)]
