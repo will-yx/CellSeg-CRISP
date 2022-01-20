@@ -14,18 +14,18 @@ import multiprocessing
 import numpy as np
 import skimage.transform
 import tensorflow as tf
+
 import keras
 import keras.backend as K
 import keras.layers as KL
 import keras.engine as KE
-#import tensorflow.keras.layers as KE
 import keras.models as KM
 
 from src import cvutils as utils
 
-# Requires TensorFlow 1.15.5 and Keras 2.1.3.
+# Requires TensorFlow 1.3+ and Keras 2.0.8+.
 from distutils.version import LooseVersion
-assert LooseVersion(tf.__version__) >= LooseVersion("1.15")
+assert LooseVersion(tf.__version__) >= LooseVersion('1.15')
 assert LooseVersion(keras.__version__) >= LooseVersion('2.1.3')
 
 ############################################################
@@ -943,7 +943,7 @@ def fpn_classifier_graph(rois, feature_maps, image_meta,
     # Reshape to [batch, boxes, num_classes, (dy, dx, log(dh), log(dw))]
     s = K.int_shape(x)
     mrcnn_bbox = KL.Reshape((s[1], num_classes, 4), name="mrcnn_bbox")(x)
-
+    
     return mrcnn_class_logits, mrcnn_probs, mrcnn_bbox
 
 
@@ -2150,8 +2150,8 @@ class MaskRCNN():
         exlude: list of layer names to excluce
         """
         import h5py
-        from keras.engine import topology
-
+        from keras.engine import saving
+        
         if exclude:
             by_name = True
 
@@ -2172,9 +2172,9 @@ class MaskRCNN():
             layers = filter(lambda l: l.name not in exclude, layers)
 
         if by_name:
-            topology.load_weights_from_hdf5_group_by_name(f, layers)
+            saving.load_weights_from_hdf5_group_by_name(f, layers)
         else:
-            topology.load_weights_from_hdf5_group(f, layers)
+            saving.load_weights_from_hdf5_group(f, layers)
         if hasattr(f, 'close'):
             f.close()
 
@@ -2379,7 +2379,7 @@ class MaskRCNN():
         # Work-around for Windows: Keras fails on Windows when using
         # multiprocessing workers. See discussion here:
         # https://github.com/matterport/Mask_RCNN/issues/13#issuecomment-353124009
-        if os.name is 'nt':
+        if os.name == 'nt':
             workers = 0
         else:
             workers = multiprocessing.cpu_count()
