@@ -127,82 +127,8 @@ class CVMask():
     def calculate_n_instances(self):
       self.n_instances = np.max(self.plane_mask)
       return self.n_instances
-
-    def update_adjacency_value(self, adjacency_matrix, original, neighbor):
-      border = False
-      
-      if original != 0 and original != neighbor:
-        border = True
-        if neighbor != 0:
-          adjacency_matrix[int(original-1), int(neighbor-1)] += 1
-      return border
     
-    def update_adjacency_matrix(self, plane_mask_flattened, width, height, adjacency_matrix, index):
-      mod_value_width = index % width
-      origin_mask = plane_mask_flattened[index]
-      left, right, up, down = False, False, False, False
-      
-      if (mod_value_width != 0):
-          left = self.update_adjacency_value(adjacency_matrix, origin_mask, plane_mask_flattened[index-1])
-      if (mod_value_width != width - 1):
-          right = self.update_adjacency_value(adjacency_matrix, origin_mask, plane_mask_flattened[index+1])
-      if (index >= width):
-          up = self.update_adjacency_value(adjacency_matrix, origin_mask, plane_mask_flattened[index-width])
-      if (index <= len(plane_mask_flattened) - 1 - width):
-          down = self.update_adjacency_value(adjacency_matrix, origin_mask, plane_mask_flattened[index+width])
-      
-      if (left or right or up or down):
-          adjacency_matrix[int(origin_mask - 1), int(origin_mask-1)] += 1
-
-    def compute_channel_means_sums_compensated(self, image, normalize=True):
-      height, width, n_channels = image.shape
-      mask_height, mask_width = self.plane_mask.shape
-      
-      assert(mask_height == height)
-      assert(mask_width  == width)
-      
-      n_masks = self.n_instances
-      
-      channel_sums = np.zeros((n_masks, n_channels))
-      channel_counts = np.zeros((n_masks, n_channels))
-      if n_masks == 0:
-        return channel_sums, channel_counts
-      
-      squashed_image = np.reshape(image, (height*width, n_channels))
-      
-      mask = self.plane_mask.flatten()
-      
-      from timeit import default_timer as timer
-      
-      t0 = timer()
-      
-      adjacency_matrix = np.zeros((n_masks, n_masks))
-      for i in range(len(mask)):
-        self.update_adjacency_matrix(mask, mask_width, mask_height, adjacency_matrix, i)
-        
-        mask_val = mask[i] - 1
-        if mask_val != -1:
-          channel_sums[mask_val.astype(np.int32)] += squashed_image[i]
-          channel_counts[mask_val.astype(np.int32)] += 1
-      
-      print('Generate adjacency matrix: {:.1f}s'.format(timer()-t0)); t0=timer()
-      
-      # Normalize adjacency matrix
-      if normalize:
-        for i in range(n_masks):
-          adjacency_matrix[i] = adjacency_matrix[i] / (max(adjacency_matrix[i, i], 1) * 2)
-          adjacency_matrix[i, i] = 1
-        print('Normalize adjacency matrix: {:.1f}s'.format(timer()-t0)); t0=timer()
-      
-      means = np.true_divide(channel_sums, channel_counts, out=np.zeros_like(channel_sums, dtype=np.float32), where=channel_counts!=0)
-      print('Compute uncompensated means: {:.1f}s'.format(timer()-t0)); t0=timer()
-      results = lstsq(adjacency_matrix, means, overwrite_a=True, overwrite_b=False)
-      compensated_means = np.maximum(results[0], np.zeros((1,1)))        
-      print('Compute compensated means: {:.1f}s'.format(timer()-t0)); t0=timer()
-      
-      return compensated_means, means, channel_counts[:,0]
-    
-    def compute_channel_means_compensated(self, image, grow=0, border=1, normalize=True):
+    def quantify_channels_adjacency(self, image, grow=0, grow_neighbors=False, normalize=True):
       from skimage.morphology import disk
       from scipy.ndimage.morphology import binary_erosion, binary_dilation
       from collections import Counter
@@ -210,37 +136,27 @@ class CVMask():
       from scipy.sparse import lil_matrix
       from scipy.sparse.linalg import lsqr
       
-      height, width, n_channels = image.shape
+      h, w, n_channels = image.shape
       mask_height, mask_width = self.plane_mask.shape
       
-      assert(mask_height == height)
-      assert(mask_width  == width)
+      assert(mask_height == h)
+      assert(mask_width  == w)
       
       n = self.n_instances
       
       print('Quantifying {} cells across {} channels'.format(n, n_channels))
       
       areas = np.zeros(n)
-      borders = np.zeros(n)
       means_u = np.zeros((n, n_channels))
-      border_means_u = np.zeros((n, n_channels))
       means_c = np.zeros((n, n_channels))
-      border_means_c = np.zeros((n, n_channels))
       if n == 0:
-        return areas, borders, means_u, border_means_u, means_c, border_means_c
+        return areas, means_u, means_c
       
-      border = max(border, 1)
-      
-      print('  Quantifing with cell growth of {} pixels, border of {} pixels'.format(grow, border))
+      print('  Quantifing with cell growth of {} pixels'.format(grow))
       
       neighbors4 = disk(1)
       neighbors8 = np.ones([3,3], dtype=np.uint8)
       firstgrowth = neighbors8 if abs(grow - round(grow)) > 0.4 else neighbors4
-      
-      if abs(border - round(border)) > 0.4: # square
-        border_growth = binary_dilation(np.pad(disk(int(border)-1), 1, mode='constant'), np.ones([3,3]))
-      else:
-        border_growth = disk(int(border))
       
       grow = int(max(0, floor(grow)))
       p = 1+grow
@@ -275,15 +191,15 @@ class CVMask():
         
         neighbor_mask = (local>0) * (1-cellmask)
         
-        neighbors_loose = binary_dilation(neighbor_mask, neighbors4) if grow else neighbor_mask
+        if grow_neighbors:
+          for g in range(grow):
+            neighbor_mask = grey_dilation(neighbor_mask, footprint=neighbors4 if g else firstgrowth) * (1-cellmask)
         
-        dilated = cellmask
-        for g in range(grow): # prevent cells from growing through neighboring cells
-          dilated = binary_dilation(dilated, neighbors4 if g else firstgrowth) * (1-neighbor_mask)
-        
+        for g in range(grow):
+          cellmask = binary_dilation(cellmask, neighbors4 if g else firstgrowth) * (1-neighbor_mask)
         
         eroded = binary_erosion(cellmask, structure=neighbors4)
-        perimeter = area - np.count_nonzero(eroded)
+        perimeter = np.count_nonzero(cellmask) - np.count_nonzero(eroded)
         
         ys, xs = np.where(cellmask.astype(np.uint8) - eroded)
         # ys, xs are coordinates of perimeter pixels
@@ -291,10 +207,10 @@ class CVMask():
         # place perimeter mask over the local plane mask at each of four positions UDLR
         # count coincidence other cells with the shifted perimeter mask
         neighbors = Counter()
-        neighbors.update(local[0:-2,1:-1][ys,xs]) # up
-        neighbors.update(local[2:  ,1:-1][ys,xs]) # down
-        neighbors.update(local[1:-1,0:-2][ys,xs]) # left
-        neighbors.update(local[1:-1,2:  ][ys,xs]) # right
+        neighbors.update(local[ys-1,xs]) # up
+        neighbors.update(local[ys+1,xs]) # down
+        neighbors.update(local[ys,xs-1]) # left
+        neighbors.update(local[ys,xs+1]) # right
         
         if normalize:
           scale = 0.5 / perimeter
@@ -308,30 +224,26 @@ class CVMask():
               A[idx, neighbor_id-1] = count
           A[idx, idx] = perimeter
         
-        perimeters[idx] = perimeter
-        perimeter_means[idx] = np.mean(image[y1+ys,x1+xs,:], axis=0)
-        
-        interiors[idx] = area - perimeter
-        ys, xs = np.where(cellmask)
-        interior_means[idx] = np.mean(image[y1+ys,x1+xs,:], axis=0)
+        coords = np.where(cellmask)
+        coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
+        areas[idx] = len(coords)
+        if areas[idx]: means_u[idx] = np.mean(image[coords[:,0],coords[:,1],:], axis=0)
       
       update_progress(1)
       A = A.tocsc() # convert to CSC format for faster operations
       print('  Generate adjacency matrix: {:.1f}s'.format(timer()-t0)); t0=timer()
       
-      #area_means = np.true_divide(area_sums, areas[:,None], out=np.zeros_like(area_sums, dtype=np.float32), where=areas[:,None]!=0)
-      
-      solutions = np.empty_like(perimeter_means)
+      solutions = np.empty_like(means_u)
       for c in range(n_channels):
-        solutions[:,c] = lsqr(A, perimeter_means[:,c], damp=0.0, show=False)[0]
+        solutions[:,c] = lsqr(A, means_u[:,c], damp=0.0, show=False)[0]
       
-      perimeter_means_comp = np.maximum(solutions, 0)
+      means_c = np.maximum(solutions, 0)
       
       print('  Compute compensated channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
       
-      return areas, borders, means_u, border_means_u, means_c, border_means_c
+      return areas, means_u, means_c
     
-    def compute_channel_means_new(self, image, grow=0, border=2):
+    def quantify_channels_morphological(self, image, grow=0, border=2):
       from skimage.morphology import disk
       from scipy.ndimage.morphology import binary_dilation, binary_erosion
       from collections import Counter
@@ -345,6 +257,19 @@ class CVMask():
       n = self.n_instances
       
       print('Quantifying {} cells across {} channels'.format(n, n_channels))
+      
+      
+      loose_full_mask = np.zeros([h,w], dtype=np.uint8)
+      loose_interior_mask = np.zeros([h,w], dtype=np.uint8)
+      loose_border_mask = np.zeros([h,w], dtype=np.uint8)
+      
+      tight_full_mask = np.zeros([h,w], dtype=np.uint8)
+      tight_interior_mask = np.zeros([h,w], dtype=np.uint8)
+      tight_border_mask = np.zeros([h,w], dtype=np.uint8)
+      
+      tight_full_labeled = np.zeros([h,w], dtype=np.uint32)
+      tight_interior_labeled = np.zeros([h,w], dtype=np.uint32)
+      tight_border_labeled = np.zeros([h,w], dtype=np.uint32)
       
       areas = np.zeros(n)
       
@@ -361,13 +286,6 @@ class CVMask():
       tight_full_means = np.zeros((n, n_channels))
       tight_border_means = np.zeros((n, n_channels))
       tight_interior_means = np.zeros((n, n_channels))
-      
-      nn_full_areas = np.zeros(n)
-      nn_border_areas = np.zeros(n)
-      nn_interior_areas = np.zeros(n)
-      nn_full_means = np.zeros((n, n_channels))
-      nn_border_means = np.zeros((n, n_channels))
-      nn_interior_means = np.zeros((n, n_channels))
       
       if n == 0:
         return ([loose_full_areas, loose_interior_areas, loose_border_areas], [loose_full_means, loose_interior_means, loose_border_means]),\
@@ -446,32 +364,6 @@ class CVMask():
         border_loose = full_loose * (1-interior_loose)
         border_tight = full_tight * (1-interior_tight)
         
-        if 0:
-          conflicted = full_loose - full_tight
-          if np.count_nonzero(conflicted) > 0:
-            coords = np.where(full_tight)
-            coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-            self_values = image[coords[:,0],coords[:,1],:]
-            
-            coords = np.where(neighbors_loose)
-            coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-            neighbor_values = image[coords[:,0],coords[:,1],:]
-            
-            coords = np.where(conflicted)
-            coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-            conflicted_values = image[coords[:,0],coords[:,1],:]
-            
-            data = np.stack([self_values, neighbor_values])
-            
-            nn = NearestNeighbors(n_neighbors=1).fit(data)
-            index = nn.kneighbors(X=conflicted_values, return_distance=False)
-            assigned = index < len(self_values)
-            
-            coords = np.array([(y-y1+p,x-x1+p) for i,(y,x) in enumerate(zip(*coords)) if assigned[i,0]])
-            
-            neighbors_nn = neighbors_tight
-            neighbors_nn[coords] = 0
-        
         if np.count_nonzero(neighbor_mask) > 50 and False:
           print('cell index: {}'.format(idx))
           bottomleftplot = cellmask * (1-neighbors_tight) + (1-cellmask) * dilated * (1-neighbors_tight) * 3 + cellmask * neighbors_tight * 2
@@ -501,10 +393,52 @@ class CVMask():
         quantify_mask(full_tight, tight_full_areas, tight_full_means)
         quantify_mask(interior_tight, tight_interior_areas, tight_interior_means)
         quantify_mask(border_tight, tight_border_areas, tight_border_means)
+        
+        
+        def update_mask(q_mask, u_mask):
+          coords = np.where(q_mask)
+          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
+          if len(coords): u_mask[coords[:,0],coords[:,1]] += 1
+          
+        update_mask(full_loose, loose_full_mask)
+        update_mask(interior_loose, loose_interior_mask)
+        update_mask(border_loose, loose_border_mask)
+        
+        update_mask(full_tight,  tight_full_mask)
+        update_mask(interior_tight, tight_interior_mask)
+        update_mask(border_tight, tight_border_mask)
+        
+        def label_mask(q_mask, u_mask):
+          coords = np.where(q_mask)
+          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
+          if len(coords): u_mask[coords[:,0],coords[:,1]] = id
+        
+        label_mask(full_tight,  tight_full_labeled)
+        label_mask(interior_tight, tight_interior_labeled)
+        label_mask(border_tight, tight_border_labeled)
+        
       
       update_progress(1)
       
       print('  Compute morphological channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
+      
+      if 0:
+        from PIL import Image
+        path = 'N:/CellVision_interior_vs_border_masks/8.4/'
+        #path = 'N:/CellVision_interior_vs_border_masks/19.1/'
+        
+        Image.fromarray(loose_full_mask).save(path + 'loose_full_mask.png')
+        Image.fromarray(loose_interior_mask).save(path + 'loose_interior_mask.png')
+        Image.fromarray(loose_border_mask).save(path + 'loose_border_mask.png')
+        
+        Image.fromarray(tight_full_mask).save(path + 'tight_full_mask.png')
+        Image.fromarray(tight_interior_mask).save(path + 'tight_interior_mask.png')
+        Image.fromarray(tight_border_mask).save(path + 'tight_border_mask.png')
+        
+        Image.fromarray(tight_full_labeled).save(path + 'tight_full_labeled.png')
+        Image.fromarray(tight_interior_labeled).save(path + 'tight_interior_labeled.png')
+        Image.fromarray(tight_border_labeled).save(path + 'tight_border_labeled.png')
+      
       
       return ([loose_full_areas, loose_interior_areas, loose_border_areas], [loose_full_means, loose_interior_means, loose_border_means]),\
              ([tight_full_areas, tight_interior_areas, tight_border_areas], [tight_full_means, tight_interior_means, tight_border_means])
@@ -636,16 +570,22 @@ class CVMask():
                 else:
                     self.masks[y_offset, x_offset, c2] = False
              
-    def greydilate(self, r=1):
+    def greydilate(self, grow=1):
       from skimage.morphology import disk
       from scipy.ndimage.morphology import grey_dilation
       
-      if r > 0:
-        self.plane_mask = grey_dilation(self.plane_mask, footprint=disk(r))
+      neighbors4 = disk(1)
+      neighbors8 = np.ones([3,3], dtype=np.uint8)
+      firstgrowth = neighbors8 if abs(grow - round(grow)) > 0.4 else neighbors4
+      
+      if grow > 0:
+        grow = int(floor(grow))
+        for g in range(grow):
+          self.plane_mask = grey_dilation(self.plane_mask, footprint=neighbors4 if g else firstgrowth)
         return
       
-      r = int(abs(r))
-      if r > 0:
+      grow = int(abs(grow))
+      if grow > 0:
         # NYI
         return
     
