@@ -45,7 +45,7 @@ class CVConfig():
     NUCLEAR_CHANNEL_NAME = 'DRAQ5'
     NUCLEAR_CYCLE = 18
     NUCLEAR_CHANNEL = 4
-    NUCLEAR_SLICE = 3
+    NUCLEAR_SLICE = 0
     GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks [0,1,1.5,2,...] or negative
     GROWTH_PIXELS_PLANE = 0 # dilate cells on the plane_mask [0,1,1.5,2,2.5, ...]
     GROWTH_PIXELS_QUANT_A = 0 # dilate cells during adjacency quantification [0,1,1.5,2,2.5, ...]
