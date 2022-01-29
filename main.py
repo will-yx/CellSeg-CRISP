@@ -58,9 +58,6 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
   
   stitcher = CVMaskStitcher(overlap=cf.OVERLAP, min_area=cf.MIN_AREA)
   
-  rows, cols = None, None
-  dataframe_regs = defaultdict(list)
-  
   if cf.OUTPUT_METHOD not in ['imagej_text_file', 'statistics', 'images', 'all']:
     raise NameError('Output method is not supported.  Check the OUTPUT_METHOD variable in cvconfig.py.')
   
@@ -72,7 +69,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
   for count, filename in enumerate(cf.FILENAMES):
     t0_file = t0 = timer()
     
-    print('Processing image: {}'.format(filename))
+    print(f'Processing image: {filename}')
     
     path = os.path.join(cf.DIRECTORY_PATH, filename)
     
@@ -100,6 +97,8 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       image = image.reshape(image.shape[:2] + (-1,))
     
     cf.SHAPE = image.shape
+
+    print(f'Image shape: {image.shape}')
     
     nuclear_index = None
     if cf.N_DIMS == 3 or cf.N_DIMS == 4:
