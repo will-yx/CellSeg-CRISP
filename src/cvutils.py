@@ -114,17 +114,29 @@ def dilate_masks(roilist, masklist, scorelist, h, w, rows, cols, overlap, r0=1):
       for i in reversed(remove): del masks[i]
       
       assert(len(roilist[L]) == len(masklist[L]) == len(scorelist[L]))
-  
-def boost_image(image, boost_factor):
-  max_mask = np.full(image.shape, 255)
-  boosted = np.rint(np.minimum(image * boost_factor, max_mask)).astype('uint8')
-  return skimage.img_as_ubyte(boosted)
+
 
 def get_channel_index(text, channel_names):
   if text not in channel_names:
     raise NameError('Couldn\'t find {} channel'.format(text))
   
   return np.where(channel_names == text)[0][0]
+
+# Assumes 2 or 3 dims
+def get_nuclear_image(image, nuclear_index=0):
+  if image.ndim == 3:
+    nuclear_image = np.expand_dims(skimage.img_as_ubyte(image[:,:,nuclear_index]), axis=2)
+  else:
+    nuclear_image = skimage.img_as_ubyte(image)
+  
+  nuclear_image = nuclear_image[:, :, [0,0,0]]
+  return nuclear_image
+    
+def boost_image(image, boost_factor):
+  max_mask = np.full(image.shape, 255)
+  boosted = np.rint(np.minimum(image * boost_factor, max_mask)).astype(np.uint8)
+  return skimage.img_as_ubyte(boosted)
+
 
 def extract_tile_information(filename):
   if filename.endswith('.tif'):
@@ -174,17 +186,6 @@ def extract_stitched_information(filename):
     except:
       raise NameError('Looks like at least one filename is not in the expected format.  Stitched mosaics look like \'mosaic_region2_ch03.tif\'')
 
-# Assumes 2 or 3 dims
-def get_nuclear_image(image, nuclear_index=0):
-  if image.ndim == 3:
-    nuclear_image = np.expand_dims(skimage.img_as_ubyte(image[:,:,nuclear_index]), axis=2)
-  else:
-    nuclear_image = skimage.img_as_ubyte(image)
-  
-  nuclear_image = nuclear_image[:, :, [0,0,0]]
-  return nuclear_image
-  
-  
 def stitched_folder_read_method(folder, load=True, filter=None):
   filter = filter or (lambda *_: True)
   
