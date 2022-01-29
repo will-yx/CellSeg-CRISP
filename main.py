@@ -127,9 +127,11 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       from numba import cuda 
       cuda.get_current_device().reset()
       
+      MODEL_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'modelFiles', 'final_weights.h5')
+      
       segmenter = CVSegmenter(
         cf.SHAPE,
-        cf.MODEL_PATH,
+        MODEL_PATH,
         cf.OVERLAP,
         cf.INCREASE_FACTOR,
         cf.MIN_AREA
