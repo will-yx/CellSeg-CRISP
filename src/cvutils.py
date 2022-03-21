@@ -233,12 +233,11 @@ def stitched_folder_read_method(folder, load=True, filter=None):
     
     return imgstack[top:bottom,left:right,:]
   
-  print('  input shape:', stack.shape)
-  stack = crop_mosaic(stack)
-  print('cropped shape:', stack.shape)
-  print()
-  
-  #stack = stack[1000:2000,1000:2000,:]
+  if load:
+    print('  input shape:', stack.shape)
+    stack = crop_mosaic(stack)
+    print('cropped shape:', stack.shape)
+    print()
   
   return stack
   
