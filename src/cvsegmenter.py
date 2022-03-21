@@ -15,8 +15,8 @@ from keras import backend as K
 from src.cvmodelconfig import CVSegmentationConfig
 
 #AUTOSIZE_MAX_SIZE = 800
-UPSCALED_MAX_SIZE = 2400 # 2400 is good, 5000 is too large, 3000+ finds too many cells per tile
-#UPSCALED_MAX_SIZE = 1800 # lowered to 1800 for 8GB GPU (6.3 GB usable?)
+#UPSCALED_MAX_SIZE = 2400 # 2400 is good, 5000 is too large, 3000+ finds too many cells per tile
+UPSCALED_MAX_SIZE = 1800 # lowered to 1800 for 8GB GPU
 
 # Maps image height, width to nrows, ncols to slice into for inference.
 IMAGE_GRID = {
