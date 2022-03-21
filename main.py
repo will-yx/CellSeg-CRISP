@@ -7,13 +7,13 @@
 # invoking python main.py or the main function imported.
 
 import os
+import sys
 from src.cvsegmenter import CVSegmenter
 from src.cvstitch_plane import CVMaskStitcher
 from src.cvmask import CVMask
 from src import cvutils
 from src import cvvisualize
 from src.my_fcswrite import write_fcs
-from cvconfig import CVConfig
 from PIL import Image
 import skimage
 import tifffile
@@ -38,6 +38,9 @@ def show(img):
 def main(indir, region_index=None, increase_factor=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
   print('Starting CellSeg-CRISP')
   
+  sys.path.insert(0, indir)
+  from CellSeg_config import CSConfig
+  
   physical_devices = tf.config.experimental.list_physical_devices('GPU') 
   try:
     for dev in physical_devices:
@@ -48,18 +51,14 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
   os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
   
-  cf = CVConfig(indir, increase_factor, growth_plane, growth_quant_A, growth_quant_M, border_quant_M)
+  cf = CSConfig(indir, increase_factor, growth_plane, growth_quant_A, growth_quant_M, border_quant_M)
   
   print('Initializing CVSegmenter at', cf.DIRECTORY_PATH)
-  if cf.IS_CODEX_OUTPUT:
-    print('Picking channel', cf.NUCLEAR_CHANNEL_NAME, 'from', len(cf.CHANNEL_NAMES), 'total to segment on')
-    print('Channel names:')
-    print(cf.CHANNEL_NAMES)
   
   stitcher = CVMaskStitcher(overlap=cf.OVERLAP, min_area=cf.MIN_AREA)
   
   if cf.OUTPUT_METHOD not in ['imagej_text_file', 'statistics', 'images', 'all']:
-    raise NameError('Output method is not supported.  Check the OUTPUT_METHOD variable in cvconfig.py.')
+    raise NameError('Output method is not supported.  Check the OUTPUT_METHOD variable in CellSeg_config.py.')
   
   growth = '_us{:.1f}_grow{:.1f}x{:.1f}x{:.1f}b{:.1f}'.format(cf.INCREASE_FACTOR, cf.GROWTH_PIXELS_MASKS, cf.GROWTH_PIXELS_PLANE, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
   
@@ -100,15 +99,24 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
 
     print(f'Image shape: {image.shape}')
     
-    nuclear_index = None
-    if cf.N_DIMS == 3 or cf.N_DIMS == 4:
-      nuclear_index = cvutils.get_channel_index(cf.NUCLEAR_CHANNEL_NAME, cf.CHANNEL_NAMES)
+    if cf.synthesize_nuclear_image:
+      print('Using a synthesized nuclear image for segmentation')
+      nuclear_index = -1
+      
+      nuclear_image = np.clip(cf.synthesize_nuclear_image(image), 0, np.iinfo(image.dtype).max).astype(image.dtype)
+      nuclear_image = np.expand_dims(skimage.img_as_ubyte(nuclear_image), axis=2)[:,:,[0,0,0]] # make RGB
+      nuclear_image = cvutils.boost_image(nuclear_image, cf.BOOST)
+    else:
+      if cf.IS_CODEX_OUTPUT:
+        print('Using channel', cf.NUCLEAR_CHANNEL_NAME, 'from', len(cf.CHANNEL_NAMES), 'total to segment on')
+        print('Channel names:')
+        print(cf.CHANNEL_NAMES)
     
-    print('Image shape: {}'.format(image.shape))
-    print('Using channel {} as nuclear image'.format(nuclear_index+1))
-    
-    nuclear_image = cvutils.get_nuclear_image(image, nuclear_index=nuclear_index)
-    nuclear_image = cvutils.boost_image(nuclear_image, cf.BOOST)
+      nuclear_index = cvutils.get_channel_index(cf.NUCLEAR_CHANNEL_NAME, cf.CHANNEL_NAMES) if cf.N_DIMS in [3,4] else 0
+      
+      print(f'Using channel {nuclear_index+1} as nuclear image')
+      nuclear_image = cvutils.get_nuclear_image(image, nuclear_index=nuclear_index)
+      nuclear_image = cvutils.boost_image(nuclear_image, cf.BOOST)
     
     h, w = nuclear_image.shape[:2]
     nc = image.shape[2] if cf.N_DIMS > 2 else 1
