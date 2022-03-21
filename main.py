@@ -280,7 +280,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       if cf.output_morphological_quant:
         t0 = timer()
         
-        QL, QT = stitched_mask.quantify_channels_morphological(image, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
+        QL, QT = stitched_mask.quantify_channels_morphological_parallel(image, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
         
         print('Quantify cells across channels (morphological): {:.1f}s'.format(timer()-t0)); t0=timer()
         

@@ -467,28 +467,6 @@ class CVMask():
     
     print('Quantifying {} cells across {} channels'.format(n, n_channels))
     
-    loose_full_mask = tight_full_mask = tight_full_labeled = None
-    
-    areas = np.zeros(n)
-    
-    loose_full_areas = np.zeros(n)
-    loose_border_areas = np.zeros(n)
-    loose_interior_areas = np.zeros(n)
-    loose_full_means = np.zeros((n, n_channels))
-    loose_border_means = np.zeros((n, n_channels))
-    loose_interior_means = np.zeros((n, n_channels))
-    
-    tight_full_areas = np.zeros(n)
-    tight_border_areas = np.zeros(n)
-    tight_interior_areas = np.zeros(n)
-    tight_full_means = np.zeros((n, n_channels))
-    tight_border_means = np.zeros((n, n_channels))
-    tight_interior_means = np.zeros((n, n_channels))
-    
-    if n == 0:
-      return ([loose_full_areas, loose_interior_areas, loose_border_areas], [loose_full_means, loose_interior_means, loose_border_means]),\
-             ([tight_full_areas, tight_interior_areas, tight_border_areas], [tight_full_means, tight_interior_means, tight_border_means])
-    
     border = max(border, 1)
     
     print('  Quantifing with cell growth of {} pixels, border of {} pixels'.format(grow, border))
@@ -528,10 +506,26 @@ class CVMask():
     t0 = timer()
     
     def process(idx1, idx2):
-      for idx in range(idx1, idx2):
-        if idx % 100 == 0: update_progress(idx / n)
-        id = idx+1
-        y1,x1,y2,x2 = rois[idx]
+      n = idx2-idx1
+      
+      loose_full_areas = np.zeros(n)
+      loose_border_areas = np.zeros(n)
+      loose_interior_areas = np.zeros(n)
+      loose_full_means = np.zeros((n, n_channels))
+      loose_border_means = np.zeros((n, n_channels))
+      loose_interior_means = np.zeros((n, n_channels))
+      
+      tight_full_areas = np.zeros(n)
+      tight_border_areas = np.zeros(n)
+      tight_interior_areas = np.zeros(n)
+      tight_full_means = np.zeros((n, n_channels))
+      tight_border_means = np.zeros((n, n_channels))
+      tight_interior_means = np.zeros((n, n_channels))
+      
+      for idx in range(n):
+        if idx1 == 0 and idx % 100 == 0: update_progress(idx / idx2)
+        id = idx1+idx+1
+        y1,x1,y2,x2 = rois[idx1+idx]
         
         local = mask[y1:y2+2*p, x1:x2+2*p]
         cellmask = (local == id)
@@ -575,10 +569,31 @@ class CVMask():
         quantify_mask(full_tight, tight_full_areas, tight_full_means)
         quantify_mask(interior_tight, tight_interior_areas, tight_interior_means)
         quantify_mask(border_tight, tight_border_areas, tight_border_means)
+        
+      return ([loose_full_areas, loose_interior_areas, loose_border_areas],\
+              [loose_full_means, loose_interior_means, loose_border_means],\
+              [tight_full_areas, tight_interior_areas, tight_border_areas],\
+              [tight_full_means, tight_interior_means, tight_border_means])
     
     from joblib import Parallel, delayed
-    n_jobs = 8
-    Parallel(n_jobs=n_jobs)(delayed(process)(i1,i2) for i1,i2 in [(int(n*i/n_jobs),int(n*(i+1)/n_jobs)) for i in range(n_jobs)])
+    n_threads = 4
+    n_splits = 4
+    output = Parallel(n_jobs=n_threads, max_nbytes='2G')\
+      (delayed(process)(i1,i2) for i1,i2 in [(int(n*i/n_splits),int(n*(i+1)/n_splits)) for i in range(n_splits)])
+    
+    loose_full_areas = np.concatenate([o[0][0] for o in output], axis=0)
+    loose_border_areas = np.concatenate([o[0][2] for o in output], axis=0)
+    loose_interior_areas = np.concatenate([o[0][1] for o in output], axis=0)
+    loose_full_means = np.concatenate([o[1][0] for o in output], axis=0)
+    loose_border_means = np.concatenate([o[1][2] for o in output], axis=0)
+    loose_interior_means = np.concatenate([o[1][1] for o in output], axis=0)
+    
+    tight_full_areas = np.concatenate([o[2][0] for o in output], axis=0)
+    tight_border_areas = np.concatenate([o[2][2] for o in output], axis=0)
+    tight_interior_areas = np.concatenate([o[2][1] for o in output], axis=0)
+    tight_full_means = np.concatenate([o[3][0] for o in output], axis=0)
+    tight_border_means = np.concatenate([o[3][2] for o in output], axis=0)
+    tight_interior_means = np.concatenate([o[3][1] for o in output], axis=0)
     
     update_progress(1)
     
