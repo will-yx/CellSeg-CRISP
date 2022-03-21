@@ -1,5 +1,6 @@
 from multiprocessing import Process
 import os
+import sys
 from main import main
 from dice_masks import main as dice_masks
 
@@ -7,9 +8,17 @@ def run_single(indir, file_index):
   main(indir, file_index)
 
 def run(indir):
-  for region in range(1,2):
-    if not os.path.exists(os.path.join(indir, 'stitched', 'region{:03d}_registration.bin'.format(region))): break
-    p = Process(target=run_single, args=(indir, region-1,))
+  num_devices = int(sys.argv[2]) if len(sys.argv) > 2 else 2
+  use_device = int(sys.argv[1]) % num_devices if len(sys.argv) > 1 else -1
+  if use_device >= 0: os.environ['CUDA_VISIBLE_DEVICES'] = str(use_device)
+  
+  print(f'Using CUDA device {use_device}')
+  
+  for reg in range(1,99):
+    if use_device >= 0 and reg%num_devices != use_device: continue
+    
+    if not os.path.exists(os.path.join(indir, 'stitched', f'region{reg:03d}_registration.bin')): break
+    p = Process(target=run_single, args=(indir, reg-1))
     p.start()
     p.join()
   
@@ -45,10 +54,26 @@ if __name__ == '__main__':
     run('N:/CODEX processed/20200629_human_run08_regen_4_20200416')
   if 0:
     run('N:/Nhidi cartilage/JNKi Codex-Right leg_20210408')
-  if 1:
+  if 0:
     #run('N:/CODEX processed/20211029 Spleen Aug cohort')
     #run('N:/CODEX processed/20211015_cartilage_AVY')
     #run('N:/CODEX processed/20211119_Muscle_ligand_test1')
     #run('N:/CODEX processed/20211130_Laura_Thymus')
     #run('N:/CODEX processed/20201203_Laura_Thymus_2')
-    run('N:/CODEX processed/20211227_cartilage_final_3_20220113')
+    
+    #run('N:/CODEX processed/20211221_cartilage_final_1_20220113')
+    #run('N:/CODEX processed/20211224_cartilage_final_2_20220113')
+    #run('N:/CODEX processed/20211227_cartilage_final_3_20220113')
+    #run('N:/CODEX processed/20220113 Spleen_run3_best')
+    
+    #run('N:/CODEX processed/20211209_VEGF_regen_run2_20211229')
+    #run('N:/CODEX processed/20211119_Muscle_ligand_test1_20220101')
+    #run('N:/CODEX processed/20211130_Laura_Thymus_20220101')
+    run('N:/CODEX processed/20201203_Laura_Thymus_2_20220101')
+  if 1:
+    #run('N:/CODEX processed/20220113 Spleen_run3_best_20220126')
+    
+    run('N:/CODEX processed/20211227_cartilage_final_3_20220126')
+    run('N:/CODEX processed/20211221_cartilage_final_1_20220126')
+    run('N:/CODEX processed/20211224_cartilage_final_2_20220126')
+    
