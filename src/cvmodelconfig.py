@@ -229,7 +229,8 @@ class CVSegmentationConfig(Config):
     IMAGE_MAX_DIM = False
     GPU_COUNT = 1
     IMAGES_PER_GPU = 1
-    DETECTION_MAX_INSTANCES = 2000
+    POST_NMS_ROIS_INFERENCE = 10000
+    DETECTION_MAX_INSTANCES = 2500
     RPN_NMS_THRESHOLD = 0.8
     DETECTION_NMS_THRESHOLD =  0.3
     DETECTION_MIN_CONFIDENCE = 0.8
@@ -238,7 +239,6 @@ class CVSegmentationConfig(Config):
     BACKBONE_STRIDES = [4, 8, 16, 32, 64]
     RPN_ANCHOR_SCALES = (8, 16, 32, 64, 128)  # anchor side in pixels
     RPN_ANCHOR_STRIDE = 1
-    POST_NMS_ROIS_INFERENCE = 6000
     USE_MINI_MASK = True
 
     # We increase the size of the image by an increase factor (2.5) because the training data nuclei 
