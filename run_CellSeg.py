@@ -1,7 +1,7 @@
 from multiprocessing import Process
 import os
 from main import main
-#from dice_masks import main as dice_masks
+from dice_masks import main as dice_masks
 
 def run_single(indir, file_index):
   main(indir, file_index)
@@ -13,7 +13,8 @@ def run(indir):
     p.start()
     p.join()
   
-  #dice_masks(indir)
+  if 1:
+    dice_masks(indir)
 
 if __name__ == '__main__':
   __spec__ = None
