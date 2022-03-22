@@ -1,3 +1,7 @@
+# fcswrite.py
+# ---------------------------
+# Helper class to write to .fcs format
+
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 """Write .fcs files for flow cytometry"""
@@ -18,7 +22,6 @@ def write_fcs(filename, chn_names, data,
               compat_percent=True,
               compat_max_int16=10000):
     """Write numpy data to an .fcs file (FCS3.0 file format)
-    
     Parameters
     ----------
     filename: str or pathlib.Path
@@ -47,7 +50,6 @@ def write_fcs(filename, chn_names, data,
         Compatibliity mode for 3rd party flow analysis software:
         If a column in `data` has a maximum above this value,
         then the display-maximum is set to 2**15.
-        
     Notes
     -----
     - These commonly used unicode characters are replaced: "µ", "²"
@@ -74,26 +76,29 @@ def write_fcs(filename, chn_names, data,
            ]
 
     if compat_chn_names:
-      # Compatibility mode: Clean up headers.
-      rpl += [[" ", ""],
-              ["?", ""],
-              ["_", ""],
-              ]
-    
+        # Compatibility mode: Clean up headers.
+        rpl += [[" ", ""],
+                ["?", ""],
+                ["_", ""],
+                ]
+
     for ii in range(len(chn_names)):
-      for (a, b) in rpl:
-        chn_names[ii] = chn_names[ii].replace(a, b)
+        for (a, b) in rpl:
+            chn_names[ii] = chn_names[ii].replace(a, b)
 
     # Data with values between 0 and 1
-    pcnt_cands = [ch for ch in range(data.shape[1]) if data[:, ch].min() >= 0 and data[:, ch].max() <= 1]
+    pcnt_cands = []
+    for ch in range(data.shape[1]):
+        if data[:, ch].min() >= 0 and data[:, ch].max() <= 1:
+            pcnt_cands.append(ch)
     if compat_percent and pcnt_cands:
-      # Compatibility mode: Scale values b/w 0 and 1 to percent
-      if compat_copy:
-        # copy if requested
-        data = data.copy()
-      for ch in pcnt_cands:
-        data[:, ch] *= 100
-    
+        # Compatibility mode: Scale values b/w 0 and 1 to percent
+        if compat_copy:
+            # copy if requested
+            data = data.copy()
+        for ch in pcnt_cands:
+            data[:, ch] *= 100
+
     if compat_negative:
         toflip = []
         for ch in range(data.shape[1]):
@@ -131,7 +136,9 @@ def write_fcs(filename, chn_names, data,
     # Check for content of data columns and set range
     for jj in range(data.shape[1]):
         # Set data maximum to that of int16
-        if compat_max_int16 and np.max(data[:, jj]) > compat_max_int16 and np.max(data[:, jj]) < 2**15:
+        if (compat_max_int16 and
+            np.max(data[:, jj]) > compat_max_int16 and
+                np.max(data[:, jj]) < 2**15):
             pnrange = int(2**15)
         # Set range for data with values between 0 and 1
         elif jj in pcnt_cands:

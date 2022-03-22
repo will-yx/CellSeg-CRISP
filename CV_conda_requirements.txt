@@ -1,7 +1,0 @@
-# This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file>
-# platform: win-64
-python=3.7.7
-vc
-vs2015_runtime
-zlib

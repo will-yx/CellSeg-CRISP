@@ -18,15 +18,14 @@ import keras
 import keras.backend as K
 import keras.layers as KL
 import keras.engine as KE
-#import tensorflow.keras.layers as KE
 import keras.models as KM
 
 from src import cvutils as utils
 
-# Requires TensorFlow 1.15.5 and Keras 2.1.3.
+# Requires TensorFlow 1.3+ and Keras 2.0.8+.
 from distutils.version import LooseVersion
-assert LooseVersion(tf.__version__) >= LooseVersion("1.15")
-assert LooseVersion(keras.__version__) >= LooseVersion('2.1.3')
+assert LooseVersion(tf.__version__) >= LooseVersion("1.3")
+assert LooseVersion(keras.__version__) >= LooseVersion('2.0.8')
 
 ############################################################
 #  Utility Functions
@@ -334,7 +333,7 @@ class ProposalLayer(KE.Layer):
 
 def log2_graph(x):
     """Implementatin of Log2. TF doesn't have a native implemenation."""
-    return tf.math.log(x) / tf.math.log(2.0)
+    return tf.log(x) / tf.log(2.0)
 
 
 class PyramidROIAlign(KE.Layer):
@@ -704,19 +703,21 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     deltas_specific = tf.gather_nd(deltas, indices)
     # Apply bounding box deltas
     # Shape: [boxes, (y1, x1, y2, x2)] in normalized coordinates
-    refined_rois = apply_box_deltas_graph(rois, deltas_specific * config.BBOX_STD_DEV)
+    refined_rois = apply_box_deltas_graph(
+        rois, deltas_specific * config.BBOX_STD_DEV)
     # Clip boxes to image window
     refined_rois = clip_boxes_graph(refined_rois, window)
-    
+
     # TODO: Filter out boxes with zero area
-    
+
     # Filter out background boxes
     keep = tf.where(class_ids > 0)[:, 0]
     # Filter out low confidence boxes
     if config.DETECTION_MIN_CONFIDENCE:
         conf_keep = tf.where(class_scores >= config.DETECTION_MIN_CONFIDENCE)[:, 0]
-        keep = tf.sets.intersection(tf.expand_dims(keep, 0), tf.expand_dims(conf_keep, 0))
-        keep = tf.sparse.to_dense(keep)[0]
+        keep = tf.sets.set_intersection(tf.expand_dims(keep, 0),
+                                        tf.expand_dims(conf_keep, 0))
+        keep = tf.sparse_tensor_to_dense(keep)[0]
 
     # Apply per-class NMS
     # 1. Prepare variables
@@ -726,39 +727,42 @@ def refine_detections_graph(rois, probs, deltas, window, config):
     unique_pre_nms_class_ids = tf.unique(pre_nms_class_ids)[0]
 
     def nms_keep_map(class_id):
-      """Apply Non-Maximum Suppression on ROIs of the given class."""
-      # Indices of ROIs of the given class
-      ixs = tf.where(tf.equal(pre_nms_class_ids, class_id))[:, 0]
-      # Apply NMS
-      class_keep = tf.image.non_max_suppression(
+        """Apply Non-Maximum Suppression on ROIs of the given class."""
+        # Indices of ROIs of the given class
+        ixs = tf.where(tf.equal(pre_nms_class_ids, class_id))[:, 0]
+        # Apply NMS
+        class_keep = tf.image.non_max_suppression(
                 tf.gather(pre_nms_rois, ixs),
                 tf.gather(pre_nms_scores, ixs),
                 max_output_size=config.DETECTION_MAX_INSTANCES,
                 iou_threshold=config.DETECTION_NMS_THRESHOLD)
-      # Map indicies
-      class_keep = tf.gather(keep, tf.gather(ixs, class_keep))
-      # Pad with -1 so returned tensors have the same shape
-      gap = config.DETECTION_MAX_INSTANCES - tf.shape(class_keep)[0]
-      class_keep = tf.pad(class_keep, [(0, gap)], mode='CONSTANT', constant_values=-1)
-      # Set shape so map_fn() can infer result shape
-      class_keep.set_shape([config.DETECTION_MAX_INSTANCES])
-      return class_keep
-    
+        # Map indicies
+        class_keep = tf.gather(keep, tf.gather(ixs, class_keep))
+        # Pad with -1 so returned tensors have the same shape
+        gap = config.DETECTION_MAX_INSTANCES - tf.shape(class_keep)[0]
+        class_keep = tf.pad(class_keep, [(0, gap)],
+                            mode='CONSTANT', constant_values=-1)
+        # Set shape so map_fn() can infer result shape
+        class_keep.set_shape([config.DETECTION_MAX_INSTANCES])
+        return class_keep
+
     # 2. Map over class IDs
-    nms_keep = tf.map_fn(nms_keep_map, unique_pre_nms_class_ids, dtype=tf.int64)
+    nms_keep = tf.map_fn(nms_keep_map, unique_pre_nms_class_ids,
+                         dtype=tf.int64)
     # 3. Merge results into one list, and remove -1 padding
     nms_keep = tf.reshape(nms_keep, [-1])
     nms_keep = tf.gather(nms_keep, tf.where(nms_keep > -1)[:, 0])
     # 4. Compute intersection between keep and nms_keep
-    keep = tf.sets.intersection(tf.expand_dims(keep, 0),tf.expand_dims(nms_keep, 0))
-    keep = tf.sparse.to_dense(keep)[0]
+    keep = tf.sets.set_intersection(tf.expand_dims(keep, 0),
+                                    tf.expand_dims(nms_keep, 0))
+    keep = tf.sparse_tensor_to_dense(keep)[0]
     # Keep top detections
     roi_count = config.DETECTION_MAX_INSTANCES
     class_scores_keep = tf.gather(class_scores, keep)
     num_keep = tf.minimum(tf.shape(class_scores_keep)[0], roi_count)
     top_ids = tf.nn.top_k(class_scores_keep, k=num_keep, sorted=True)[1]
     keep = tf.gather(keep, top_ids)
-    
+
     # Arrange output as [N, (y1, x1, y2, x2, class_id, score)]
     # Coordinates are normalized.
     detections = tf.concat([
@@ -766,7 +770,7 @@ def refine_detections_graph(rois, probs, deltas, window, config):
         tf.cast(tf.gather(class_ids, keep), tf.float32)[..., tf.newaxis],
         tf.gather(class_scores, keep)[..., tf.newaxis]
         ], axis=1)
-    
+
     # Pad with zeros if detections < DETECTION_MAX_INSTANCES
     gap = config.DETECTION_MAX_INSTANCES - tf.shape(detections)[0]
     detections = tf.pad(detections, [(0, gap), (0, 0)], "CONSTANT")
@@ -2150,7 +2154,7 @@ class MaskRCNN():
         exlude: list of layer names to excluce
         """
         import h5py
-        from keras.engine import topology
+        from keras.engine import saving
 
         if exclude:
             by_name = True
@@ -2172,9 +2176,9 @@ class MaskRCNN():
             layers = filter(lambda l: l.name not in exclude, layers)
 
         if by_name:
-            topology.load_weights_from_hdf5_group_by_name(f, layers)
+            saving.load_weights_from_hdf5_group_by_name(f, layers)
         else:
-            topology.load_weights_from_hdf5_group(f, layers)
+            saving.load_weights_from_hdf5_group(f, layers)
         if hasattr(f, 'close'):
             f.close()
 
@@ -2437,7 +2441,8 @@ class MaskRCNN():
         windows = np.stack(windows)
         return molded_images, image_metas, windows
 
-    def unmold_detections(self, detections, mrcnn_mask, original_image_shape, image_shape, window):
+    def unmold_detections(self, detections, mrcnn_mask, original_image_shape,
+                          image_shape, window):
         """Reformats the detections of one image from the format of the neural
         network output to a format suitable for use in the rest of the
         application.
@@ -2481,7 +2486,8 @@ class MaskRCNN():
 
         # Filter out detections with zero area. Happens in early training when
         # network weights are still random
-        exclude_ix = np.where((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
+        exclude_ix = np.where(
+            (boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
         if exclude_ix.shape[0] > 0:
             boxes = np.delete(boxes, exclude_ix, axis=0)
             class_ids = np.delete(class_ids, exclude_ix, axis=0)
@@ -2492,143 +2498,84 @@ class MaskRCNN():
         # Resize masks to original image size and set boundary threshold.
         full_masks = []
         for i in range(N):
-          # Convert neural network mask to full size mask
-          full_mask = utils.unmold_mask(masks[i], boxes[i], original_image_shape).astype(np.bool)
-          full_masks.append(full_mask)
-        full_masks = np.stack(full_masks, axis=-1) if full_masks else np.empty(original_image_shape[:2] + (0,), dtype=np.bool)
-        
+            # Convert neural network mask to full size mask
+            full_mask = utils.unmold_mask(masks[i], boxes[i], original_image_shape)
+            full_masks.append(full_mask)
+        full_masks = np.stack(full_masks, axis=-1)\
+            if full_masks else np.empty(original_image_shape[:2] + (0,), dtype=np.bool)
+
         return boxes, class_ids, scores, full_masks
-        
-    
-    def unmold_detections_small(self, detections, mrcnn_mask, original_image_shape, image_shape, window):
-      """Reformats the detections of one image from the format of the neural
-      network output to a format suitable for use in the rest of the
-      application.
-
-      detections: [N, (y1, x1, y2, x2, class_id, score)] in normalized coordinates
-      mrcnn_mask: [N, height, width, num_classes]
-      original_image_shape: [H, W, C] Original image shape before resizing
-      image_shape: [H, W, C] Shape of the image after resizing and padding
-      window: [y1, x1, y2, x2] Pixel coordinates of box in the image where the real
-              image is excluding the padding.
-
-      Returns:
-      boxes: [N, (y1, x1, y2, x2)] Bounding boxes in pixels
-      class_ids: [N] Integer class IDs for each bounding box
-      scores: [N] Float probability scores of the class_id
-      masks: [height, width, num_instances] Instance masks
-      """
-      # How many detections do we have?
-      # Detections array is padded with zeros. Find the first class_id == 0.
-      zero_ix = np.where(detections[:, 4] == 0)[0]
-      N = zero_ix[0] if zero_ix.shape[0] > 0 else detections.shape[0]
-      
-      # Extract boxes, class_ids, scores, and class-specific masks
-      boxes = detections[:N, :4]
-      class_ids = detections[:N, 4].astype(np.int32)
-      scores = detections[:N, 5]
-      masks = mrcnn_mask[np.arange(N), :, :, class_ids]
-
-      # Translate normalized coordinates in the resized image to pixel
-      # coordinates in the original image before resizing
-      window = utils.norm_boxes(window, image_shape[:2])
-      wy1, wx1, wy2, wx2 = window
-      shift = np.array([wy1, wx1, wy1, wx1])
-      wh = wy2 - wy1  # window height
-      ww = wx2 - wx1  # window width
-      scale = np.array([wh, ww, wh, ww])
-      # Convert boxes to normalized coordinates on the window
-      boxes = np.divide(boxes - shift, scale)
-      # Convert boxes to pixel coordinates on the original image
-      boxes = utils.denorm_boxes(boxes, original_image_shape[:2])
-
-      # Filter out detections with zero area. Happens in early training when
-      # network weights are still random
-      exclude_ix = np.where((boxes[:, 2] - boxes[:, 0]) * (boxes[:, 3] - boxes[:, 1]) <= 0)[0]
-      if exclude_ix.shape[0] > 0:
-        boxes = np.delete(boxes, exclude_ix, axis=0)
-        class_ids = np.delete(class_ids, exclude_ix, axis=0)
-        scores = np.delete(scores, exclude_ix, axis=0)
-        masks = np.delete(masks, exclude_ix, axis=0)
-        N = class_ids.shape[0]
-      
-      # Resize masks to original image size and set boundary threshold
-      out_masks = []
-      for i in range(N):
-        # Convert neural network mask to full size mask
-        mask = utils.unmold_mask_small(masks[i], boxes[i], original_image_shape)
-        out_masks.append(mask)
-      
-      return boxes, class_ids, scores, out_masks
 
     # Function to batch box generation so we can generate more without getting memory errors.
     # Only supports an image batch size of 1, because there is no use case for batch_size > 1
     # TODO: Make each batch run on separate GPU for acceleration?
     def detect_memory_batched(self, n_batches, images, verbose=0):
-      assert self.mode == "inference", "Create model in inference mode."
-      assert len(images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
-      
-      if verbose:
-        log("Processing {} images".format(len(images)))
-        for image in images:
-          log("image", image)
-      
-      # Mold inputs to format expected by the neural network
-      molded_images, image_metas, windows = self.mold_inputs(images)
 
-      # Validate image sizes
-      # All images in a batch MUST be of the same size
-      image_shape = molded_images[0].shape
-      for g in molded_images[1:]:
-          assert g.shape == image_shape,\
-              "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
+        assert self.mode == "inference", "Create model in inference mode."
+        assert len(
+            images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
 
-      # Anchors
-      anchors = self.get_anchors(image_shape)
-      # Duplicate across the batch dimension because Keras requires it
-      # TODO: can this be optimized to avoid duplicating the anchors?
-      anchors = np.broadcast_to(anchors, (self.config.BATCH_SIZE,) + anchors.shape)
+        if verbose:
+            log("Processing {} images".format(len(images)))
+            for image in images:
+                log("image", image)
 
-      anchor_splits = np.array_split(anchors, n_batches)
+        # Mold inputs to format expected by the neural network
+        molded_images, image_metas, windows = self.mold_inputs(images)
 
-      if verbose:
-        log("molded_images", molded_images)
-        log("image_metas", image_metas)
-        log("anchors", anchors)
-      # Run object detection
-      all_detections = []
-      all_masks = []
-      for split in anchor_splits:
-          detections, _, _, mrcnn_mask, _, _, _ =\
-              self.keras_model.predict([molded_images, image_metas, split], verbose=0)
-          all_detections.append(detections)
-          all_masks.append(mrcnn_mask)
-      # Process detections
-      results = []
-      image = images[0]
-      molded_image = molded_images[0]
-      window = windows[0]
+        # Validate image sizes
+        # All images in a batch MUST be of the same size
+        image_shape = molded_images[0].shape
+        for g in molded_images[1:]:
+            assert g.shape == image_shape,\
+                "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
 
-      all_final_rois = []
-      all_final_class_ids = []
-      all_final_scores = []
-      all_final_masks = []
-      for i in range(n_batches):
-          final_rois, final_class_ids, final_scores, final_masks =\
-              self.unmold_detections_small(all_detections[i], all_masks[i],
-                                     image.shape, molded_image.shape,
-                                     window)
-          all_final_rois.extend(final_rois)
-          all_final_class_ids.extend(final_class_ids)
-          all_final_scores.extend(final_scores)
-          all_final_masks.extend(final_masks)
-      results.append({
-          "rois": all_final_rois,
-          "class_ids": all_final_class_ids,
-          "scores": all_final_scores,
-          "masks": all_final_masks,
-      })
-      return results
+        # Anchors
+        anchors = self.get_anchors(image_shape)
+        # Duplicate across the batch dimension because Keras requires it
+        # TODO: can this be optimized to avoid duplicating the anchors?
+        anchors = np.broadcast_to(anchors, (self.config.BATCH_SIZE,) + anchors.shape)
+
+        anchor_splits = np.array_split(anchors, n_batches)
+
+        if verbose:
+            log("molded_images", molded_images)
+            log("image_metas", image_metas)
+            log("anchors", anchors)
+        # Run object detection
+        all_detections = []
+        all_masks = []
+        for split in anchor_splits:
+            detections, _, _, mrcnn_mask, _, _, _ =\
+                self.keras_model.predict([molded_images, image_metas, split], verbose=0)
+            all_detections.append(detections)
+            all_masks.append(mrcnn_mask)
+        # Process detections
+        results = []
+        image = images[0]
+        molded_image = molded_images[0]
+        window = windows[0]
+
+        all_final_rois = []
+        all_final_class_ids = []
+        all_final_scores = []
+        all_final_masks = []
+        for i in range(n_batches):
+            final_rois, final_class_ids, final_scores, final_masks =\
+                self.unmold_detections(all_detections[i], all_masks[i],
+                                       image.shape, molded_image.shape,
+                                       window)
+            all_final_rois.extend(final_rois)
+            all_final_class_ids.extend(final_class_ids)
+            all_final_scores.extend(final_scores)
+            all_final_masks.extend(final_masks)
+        results.append({
+            "rois": all_final_rois,
+            "class_ids": all_final_class_ids,
+            "scores": all_final_scores,
+            "masks": all_final_masks,
+        })
+        return results
     
     def detect(self, images, verbose=0):
         """Runs the detection pipeline.
@@ -2640,22 +2587,23 @@ class MaskRCNN():
         masks: [H, W, N] instance binary masks
         """
         assert self.mode == "inference", "Create model in inference mode."
-        assert len(images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
+        assert len(
+            images) == self.config.BATCH_SIZE, "len(images) must be equal to BATCH_SIZE"
 
         if verbose:
-          log("Processing {} images".format(len(images)))
-          for image in images:
-            log("image", image)
-        
+            log("Processing {} images".format(len(images)))
+            for image in images:
+                log("image", image)
+
         # Mold inputs to format expected by the neural network
         molded_images, image_metas, windows = self.mold_inputs(images)
-        
+
         # Validate image sizes
         # All images in a batch MUST be of the same size
         image_shape = molded_images[0].shape
         for g in molded_images[1:]:
-          assert g.shape == image_shape,\
-            "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
+            assert g.shape == image_shape,\
+                "After resizing, all images must have the same size. Check IMAGE_RESIZE_MODE and image sizes."
 
         # Anchors
         anchors = self.get_anchors(image_shape)
@@ -2673,7 +2621,7 @@ class MaskRCNN():
         results = []
         for i, image in enumerate(images):
             final_rois, final_class_ids, final_scores, final_masks =\
-                self.unmold_detections_small(detections[i], mrcnn_mask[i],
+                self.unmold_detections(detections[i], mrcnn_mask[i],
                                        image.shape, molded_images[i].shape,
                                        windows[i])
             results.append({
