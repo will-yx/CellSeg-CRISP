@@ -57,8 +57,8 @@ class CSConfig():
     BOOST = 1
     
     OVERLAP = 80
-    MIN_AREA = 20
-    INCREASE_FACTOR = 3.5
+    MIN_AREA = 40
+    INCREASE_FACTOR = 3.0
     
     # Probably don't change this, except the valid image extensions when working with unique extensions.
     def __init__(self, input_path, increase_factor=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None, nuclear_cycle=None, nuclear_channel=None, nuclear_slice=None):
