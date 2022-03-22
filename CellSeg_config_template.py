@@ -12,16 +12,16 @@ class CSConfig():
 
     IS_CODEX_OUTPUT - CODEX output files have special filenames that allow outputs to contain more metadata about absolute positions, regs, and other things.  
     Set this to false if not using the filename convention.  Follow the naming convention in the install/run page on the CellSeg website to output this metadata for non-CODEX images.
-    input_path - path to directory containing image folder and channels file
+    input_path - path to directory containing image folders and config files.
     output_path - name of directory to save output in. If directory does not exist, CellSeg creates directory.
-    DIRECTORY_PATH - directory that contains your .tif bestFocus images (usually the bestFocus folder)
-    CHANNEL_PATH - path to your channels file (usually called channelNames.txt). Only used for tif images with more than 3 channels, or 4D TIF images.
-    NUCLEAR_CHANNEL_NAME - name of nuclear stain (corresponding to channelNames.txt).  Case sensitive.  Only used for tif images with more than 3 channels, or 4D TIF images.
+    DIRECTORY_PATH - directory that contains the images to be processed.
+    CHANNEL_PATH - path to your channels file (usually called channelnames.txt). Required for tif images with more than 3 channels, or 4D TIF images.
+    NUCLEAR_CHANNEL_NAME - name of nuclear stain (corresponding to channelnames.txt).  Case sensitive.  Only used for tif images with more than 3 channels, or 4D TIF images.
     GROWTH_PIXELS - number of pixels from which to grow out from the nucleus to define a cell boundary.  Change based on tissue types.
-    BOOST - multiplier with which to boost the pixels of the nuclear stain before inference.  Choose 'auto' to try to infer the best boost to use based off of AUTOBOOST_PERCENTILE
-    OVERLAP - amount of pixels overlap with which to run the stitching algorithm. Must be divisible by 2 and should be greater than expected average cell diameter in pixels
-    THRESHOLD - minimum size (in pixels) of kept segmented instances. Objects smaller than THRESHOLD are not included in final segmentation output.
-    INCREASE_FACTOR - Amount with which to boost the size of the image. Default is 2.5x, decided by visual inspection after training on the Kaggle dataset.
+    BOOST - multiplier with which to boost the pixels of the nuclear stain before inference.
+    OVERLAP - pixel overlap between adjacent subtiles during nuclei segmentation. Must be divisible by 2 and should be greater than expected average cell diameter.
+    THRESHOLD - minimum size (in pixel area) of detected objects to keep.
+    INCREASE_FACTOR - Upscale the image by this factor for segmentation. Default is 2.5x, decided by visual inspection after training on the Kaggle dataset.
     
     ---------OUTPUT PATHS-------------
     IMAGEJ_OUTPUT_PATH - path to output imagej .txt files
