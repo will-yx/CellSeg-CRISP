@@ -95,8 +95,12 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       image = np.transpose(image, (2, 3, 0, 1))
       image = image.reshape(image.shape[:2] + (-1,))
     
+    if cf.IS_CODEX_OUTPUT and image.ndim == 3:
+      if image.shape[0] < image.shape[1] and image.shape[0] < image.shape[2]:
+        image = np.transpose(image, (1, 2, 0)) # (channels, height, width) => (height, width, channels)
+    
     cf.SHAPE = image.shape
-
+    
     print(f'Image shape: {image.shape}')
     
     if cf.synthesize_nuclear_image:
