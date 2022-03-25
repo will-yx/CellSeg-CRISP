@@ -243,70 +243,51 @@ class CVMask():
     
     return areas, means_u, means_c
   
-  def quantify_channels_morphological(self, image, grow=0, border=2):
+  def quantify_channels_morphological(self, image, growth=0, border=2):
     from skimage.morphology import disk
     from scipy.ndimage.morphology import binary_dilation, binary_erosion
     from collections import Counter
     
-    h, w, n_channels = image.shape
+    border = max(border, 1)
+    
+    print(f'Quantifying {n} cells across {nc} channels')
+    print(f'Quantifing with cell growth of {growth:.1f} pixels, border of {border:.1f} pixels')
+    
+    n = self.n_instances
+    h, w, nc = image.shape
     mask_height, mask_width = self.plane_mask.shape
     
     assert(mask_height == h)
     assert(mask_width  == w)
     
-    n = self.n_instances
+    loose_full_areas = np.zeros(n, dtype=np.float32)
+    loose_border_areas = np.zeros(n, dtype=np.float32)
+    loose_interior_areas = np.zeros(n, dtype=np.float32)
+    loose_full_means = np.zeros((n, nc), dtype=np.float32)
+    loose_border_means = np.zeros((n, nc), dtype=np.float32)
+    loose_interior_means = np.zeros((n, nc), dtype=np.float32)
     
-    print('Quantifying {} cells across {} channels'.format(n, n_channels))
-    
-    if 0: # debug output
-      loose_full_mask = np.zeros([h,w], dtype=np.uint8)
-      loose_interior_mask = np.zeros([h,w], dtype=np.uint8)
-      loose_border_mask = np.zeros([h,w], dtype=np.uint8)
-      
-      tight_full_mask = np.zeros([h,w], dtype=np.uint8)
-      tight_interior_mask = np.zeros([h,w], dtype=np.uint8)
-      tight_border_mask = np.zeros([h,w], dtype=np.uint8)
-      
-      tight_full_labeled = np.zeros([h,w], dtype=np.uint32)
-      tight_interior_labeled = np.zeros([h,w], dtype=np.uint32)
-      tight_border_labeled = np.zeros([h,w], dtype=np.uint32)
-    else:
-      loose_full_mask = tight_full_mask = tight_full_labeled = None
-    
-    areas = np.zeros(n)
-    
-    loose_full_areas = np.zeros(n)
-    loose_border_areas = np.zeros(n)
-    loose_interior_areas = np.zeros(n)
-    loose_full_means = np.zeros((n, n_channels))
-    loose_border_means = np.zeros((n, n_channels))
-    loose_interior_means = np.zeros((n, n_channels))
-    
-    tight_full_areas = np.zeros(n)
-    tight_border_areas = np.zeros(n)
-    tight_interior_areas = np.zeros(n)
-    tight_full_means = np.zeros((n, n_channels))
-    tight_border_means = np.zeros((n, n_channels))
-    tight_interior_means = np.zeros((n, n_channels))
+    tight_full_areas = np.zeros(n, dtype=np.float32)
+    tight_border_areas = np.zeros(n, dtype=np.float32)
+    tight_interior_areas = np.zeros(n, dtype=np.float32)
+    tight_full_means = np.zeros((n, nc), dtype=np.float32)
+    tight_border_means = np.zeros((n, nc), dtype=np.float32)
+    tight_interior_means = np.zeros((n, nc), dtype=np.float32)
     
     if n == 0:
       return ([loose_full_areas, loose_interior_areas, loose_border_areas], [loose_full_means, loose_interior_means, loose_border_means]),\
              ([tight_full_areas, tight_interior_areas, tight_border_areas], [tight_full_means, tight_interior_means, tight_border_means])
     
-    border = max(border, 1)
-    
-    print('  Quantifing with cell growth of {} pixels, border of {} pixels'.format(grow, border))
-    
     neighbors4 = disk(1)
     neighbors8 = np.ones([3,3], dtype=np.uint8)
-    firstgrowth = neighbors8 if abs(grow - round(grow)) > 0.4 else neighbors4
+    firstgrowth = neighbors8 if abs(growth - round(growth)) > 0.4 else neighbors4
     
     if abs(border - round(border)) > 0.4: # square
       border_growth = binary_dilation(np.pad(disk(int(border)-1), 1, mode='constant'), np.ones([3,3]))
     else:
       border_growth = disk(int(border))
     
-    grow = int(max(0, floor(grow)))
+    grow = int(max(0, floor(growth)))
     p = 1 + grow*2 # we need room to grow for the cell and for any neighbors
     
     mask = np.pad(self.plane_mask, p, mode='constant')
@@ -366,24 +347,6 @@ class CVMask():
       border_loose = full_loose * (1-interior_loose)
       border_tight = full_tight * (1-interior_tight)
       
-      '''
-      if np.count_nonzero(neighbor_mask) > 50 and False:
-        print('cell index: {}'.format(idx))
-        bottomleftplot = cellmask * (1-neighbors_tight) + (1-cellmask) * dilated * (1-neighbors_tight) * 3 + cellmask * neighbors_tight * 2
-        bottomrightplot = cellmask * (1-neighbors_loose) + (1-cellmask) * dilated * (1-neighbors_loose) * 3 + cellmask * neighbors_loose * 2
-        printmaskb(np.column_stack([cellmask + neighbor_mask*2, dilated + neighbor_mask*2]))
-        printmaskb(np.column_stack([bottomleftplot, bottomrightplot]))
-        printmaskb(np.column_stack([interior_tight, interior_loose]))
-        printmaskb(np.column_stack([border_tight, border_loose]))
-        
-        cell = (mask[y1+p:y2+p,x1+p:x2+p] == id) * 255 + (mask[y1+p:y2+p,x1+p:x2+p] > 0) * (mask[y1+p:y2+p,x1+p:x2+p] != id) * 128
-        interior_border = interior_loose[p:-p,p:-p] * 128 + border_loose[p:-p,p:-p] * 255
-        showfour(cell, image[y1:y2,x1:x2,0], interior_border, image[y1:y2,x1:x2,-1])
-        shown += 1
-        if shown > 10:
-          asdfasdf
-      '''
-      
       def quantify_mask(q_mask, q_areas, q_means):
         coords = np.where(q_mask)
         coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
@@ -397,56 +360,10 @@ class CVMask():
       quantify_mask(full_tight, tight_full_areas, tight_full_means)
       quantify_mask(interior_tight, tight_interior_areas, tight_interior_means)
       quantify_mask(border_tight, tight_border_areas, tight_border_means)
-      
-      '''
-      # debug output
-      if loose_full_mask and tight_full_mask:
-        def update_mask(q_mask, u_mask):
-          coords = np.where(q_mask)
-          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-          if len(coords): u_mask[coords[:,0],coords[:,1]] += 1
-          
-        update_mask(full_loose, loose_full_mask)
-        update_mask(interior_loose, loose_interior_mask)
-        update_mask(border_loose, loose_border_mask)
-        
-        update_mask(full_tight,  tight_full_mask)
-        update_mask(interior_tight, tight_interior_mask)
-        update_mask(border_tight, tight_border_mask)
-      
-      if tight_full_labeled:
-        def label_mask(q_mask, u_mask):
-          coords = np.where(q_mask)
-          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-          if len(coords): u_mask[coords[:,0],coords[:,1]] = id
-        
-        label_mask(full_tight,  tight_full_labeled)
-        label_mask(interior_tight, tight_interior_labeled)
-        label_mask(border_tight, tight_border_labeled)
-      '''
-      
     
     update_progress(1)
     
     print('  Compute morphological channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
-    
-    if 0: # debug output
-      from PIL import Image
-      path = 'N:/CellVision_interior_vs_border_masks/8.4/'
-      #path = 'N:/CellVision_interior_vs_border_masks/19.1/'
-      
-      Image.fromarray(loose_full_mask).save(path + 'loose_full_mask.png')
-      Image.fromarray(loose_interior_mask).save(path + 'loose_interior_mask.png')
-      Image.fromarray(loose_border_mask).save(path + 'loose_border_mask.png')
-      
-      Image.fromarray(tight_full_mask).save(path + 'tight_full_mask.png')
-      Image.fromarray(tight_interior_mask).save(path + 'tight_interior_mask.png')
-      Image.fromarray(tight_border_mask).save(path + 'tight_border_mask.png')
-      
-      Image.fromarray(tight_full_labeled).save(path + 'tight_full_labeled.png')
-      Image.fromarray(tight_interior_labeled).save(path + 'tight_interior_labeled.png')
-      Image.fromarray(tight_border_labeled).save(path + 'tight_border_labeled.png')
-    
     
     return ([loose_full_areas, loose_interior_areas, loose_border_areas], [loose_full_means, loose_interior_means, loose_border_means]),\
            ([tight_full_areas, tight_interior_areas, tight_border_areas], [tight_full_means, tight_interior_means, tight_border_means])
