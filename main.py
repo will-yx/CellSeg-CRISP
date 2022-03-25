@@ -281,9 +281,8 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       if cf.output_morphological_quant:
         t0 = timer()
         
-        QL, QT = stitched_mask.quantify_channels_morphological(image, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
-        
-        #print(f'Quantify cells across channels (morphological): {timer()-t0:.1f}s'); t0=timer()
+        QL, QT = stitched_mask.quantify_channels_morphological_c(image, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
+        print(f'Quantify cells across channels (morphological): {timer()-t0:.1f}s'); t0=timer()
         
         metadata_list = np.array([reg, 1])
         metadata = np.column_stack([np.arange(1,1+n), np.broadcast_to(metadata_list, (n, len(metadata_list)))])

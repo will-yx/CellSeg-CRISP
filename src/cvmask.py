@@ -369,155 +369,68 @@ class CVMask():
            ([tight_full_areas, tight_interior_areas, tight_border_areas], [tight_full_means, tight_interior_means, tight_border_means])
   
   
-  def quantify_channels_morphological_parallel(self, image, grow=0, border=2):
-    from skimage.morphology import disk
-    from scipy.ndimage.morphology import binary_dilation, binary_erosion
-    from collections import Counter
-    
-    h, w, n_channels = image.shape
-    mask_height, mask_width = self.plane_mask.shape
-    
-    assert(mask_height == h)
-    assert(mask_width  == w)
-    
-    n = self.n_instances
-    
-    print('Quantifying {} cells across {} channels'.format(n, n_channels))
-    
+  def quantify_channels_morphological_c(self, image, growth=0, border=2):
     border = max(border, 1)
     
-    print('  Quantifing with cell growth of {} pixels, border of {} pixels'.format(grow, border))
+    mask = np.ascontiguousarray(self.plane_mask, dtype=np.uint32)
+    rois = np.ascontiguousarray(self.rois, dtype=np.int32)
     
-    neighbors4 = disk(1)
-    neighbors8 = np.ones([3,3], dtype=np.uint8)
-    firstgrowth = neighbors8 if abs(grow - round(grow)) > 0.4 else neighbors4
+    n = self.n_instances
+    h, w, nc = image.shape
     
-    if abs(border - round(border)) > 0.4: # square
-      border_growth = binary_dilation(np.pad(disk(int(border)-1), 1, mode='constant'), np.ones([3,3]))
-    else:
-      border_growth = disk(int(border))
+    assert(mask.shape[0] == h)
+    assert(mask.shape[1] == w)
     
-    grow = int(max(0, floor(grow)))
-    p = 1 + grow*2 # we need room to grow for the cell and for any neighbors
+    print(f'Quantifying {n} cells across {nc} channels')
+    print(f'Quantifing with cell growth of {growth:.1f} pixels, border of {border:.1f} pixels')
     
-    mask = np.pad(self.plane_mask, p, mode='constant')
-    rois = self.rois
+    areas = np.ascontiguousarray(np.empty((6,n   ), dtype=np.float32))
+    means = np.ascontiguousarray(np.empty((6,n,nc), dtype=np.float32))
     
-    def printmaskb(mask):
-      print()
-      print('+'+ '─'*(2*mask.shape[1]-1) + '+')
-      lookup = ['·', '█', 'X', '@']
-      for row in mask.astype(np.uint8):
-        row = [lookup[int(x)] for x in row]
-        print('|' + ' '.join(row) + '|')
-      print('+'+ '─'*(2*mask.shape[1]-1) + '+')
+    assert( mask.data.c_contiguous)
+    assert( rois.data.c_contiguous)
+    assert(image.data.c_contiguous)
     
-    def update_progress(progress):
-      bar_length = 80
-      block = int(round(bar_length * progress))
-      
-      end = '\r' if progress < 1 else '\n'
-      print('  [{0}] {1:.1f}%'.format( '#' * block + '-' * (bar_length - block), progress*100), end=end)
+    assert( mask.dtype == c_uint)
+    assert( rois.dtype == c_int)
+    assert(image.dtype == c_float)
     
-    from timeit import default_timer as timer
-    t0 = timer()
+    c_mask  =  mask.ctypes.data_as(POINTER(c_uint))
+    c_rois  =  rois.ctypes.data_as(POINTER(c_int))
+    c_img   = image.ctypes.data_as(POINTER(c_float))
+    c_areas = areas.ctypes.data_as(POINTER(c_float))
+    c_means = means.ctypes.data_as(POINTER(c_float))
     
-    def process(idx1, idx2):
-      n = idx2-idx1
-      
-      loose_full_areas = np.zeros(n)
-      loose_border_areas = np.zeros(n)
-      loose_interior_areas = np.zeros(n)
-      loose_full_means = np.zeros((n, n_channels))
-      loose_border_means = np.zeros((n, n_channels))
-      loose_interior_means = np.zeros((n, n_channels))
-      
-      tight_full_areas = np.zeros(n)
-      tight_border_areas = np.zeros(n)
-      tight_interior_areas = np.zeros(n)
-      tight_full_means = np.zeros((n, n_channels))
-      tight_border_means = np.zeros((n, n_channels))
-      tight_interior_means = np.zeros((n, n_channels))
-      
-      for idx in range(n):
-        if idx1 == 0 and idx % 100 == 0: update_progress(idx / idx2)
-        id = idx1+idx+1
-        y1,x1,y2,x2 = rois[idx1+idx]
-        
-        local = mask[y1:y2+2*p, x1:x2+2*p]
-        cellmask = (local == id)
-        
-        area = np.count_nonzero(cellmask)
-        if area < 1: continue
-        
-        neighbor_mask = (local > 0) * (1-cellmask)
-        
-        neighbors_loose = binary_dilation(neighbor_mask, neighbors8) if grow else neighbor_mask
-        
-        neighbors_tight = neighbor_mask
-        for g in range(grow+1): # prevent cells from growing through neighboring cells
-          neighbors_tight = binary_dilation(neighbors_tight * (1-cellmask), neighbors4 if g else firstgrowth)
-        
-        dilated = cellmask
-        for g in range(grow): # prevent cells from growing through neighboring cells
-          dilated = binary_dilation(dilated, neighbors4 if g else firstgrowth) * (1-neighbor_mask)
-        
-        interior = binary_erosion(dilated, border_growth)
-        
-        full_loose = dilated * (1-neighbors_loose)
-        full_tight = dilated * (1-neighbors_tight)
-        
-        interior_loose = interior * (1-neighbors_loose)
-        interior_tight = interior * (1-neighbors_tight)
-        
-        border_loose = full_loose * (1-interior_loose)
-        border_tight = full_tight * (1-interior_tight)
-        
-        def quantify_mask(q_mask, q_areas, q_means):
-          coords = np.where(q_mask)
-          coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
-          q_areas[idx] = len(coords)
-          if q_areas[idx]: q_means[idx] = np.mean(image[coords[:,0],coords[:,1],:], axis=0)
-        
-        quantify_mask(full_loose, loose_full_areas, loose_full_means)
-        quantify_mask(interior_loose, loose_interior_areas, loose_interior_means)
-        quantify_mask(border_loose, loose_border_areas, loose_border_means)
-        
-        quantify_mask(full_tight, tight_full_areas, tight_full_means)
-        quantify_mask(interior_tight, tight_interior_areas, tight_interior_means)
-        quantify_mask(border_tight, tight_border_areas, tight_border_means)
-        
-      return ([loose_full_areas, loose_interior_areas, loose_border_areas],\
-              [loose_full_means, loose_interior_means, loose_border_means],\
-              [tight_full_areas, tight_interior_areas, tight_border_areas],\
-              [tight_full_means, tight_interior_means, tight_border_means])
+    libSpaCE = CDLL('./SpaCE.dll')
+    #libSpaCE = CDLL('C:/Users/Colin/Documents/Programming/CUDA programs/bin/win64/Release/SpaCE.dll')
     
-    from joblib import Parallel, delayed
-    n_threads = 4
-    n_splits = 4
-    output = Parallel(n_jobs=n_threads, max_nbytes='2G')\
-      (delayed(process)(i1,i2) for i1,i2 in [(int(n*i/n_splits),int(n*(i+1)/n_splits)) for i in range(n_splits)])
+    c_quantify_masks_across_channels = libSpaCE.quantify_masks_across_channels
+    c_quantify_masks_across_channels.restype = None
+    c_quantify_masks_across_channels.argtypes = [POINTER(c_uint), POINTER(c_int), POINTER(c_float), c_int, c_int, c_int, c_int, c_float, c_float, POINTER(c_float), POINTER(c_float)]
     
-    loose_full_areas = np.concatenate([o[0][0] for o in output], axis=0)
-    loose_border_areas = np.concatenate([o[0][2] for o in output], axis=0)
-    loose_interior_areas = np.concatenate([o[0][1] for o in output], axis=0)
-    loose_full_means = np.concatenate([o[1][0] for o in output], axis=0)
-    loose_border_means = np.concatenate([o[1][2] for o in output], axis=0)
-    loose_interior_means = np.concatenate([o[1][1] for o in output], axis=0)
+    c_quantify_masks_across_channels(c_mask, c_rois, c_img, nc, w, h, n, growth, border, c_areas, c_means)
     
-    tight_full_areas = np.concatenate([o[2][0] for o in output], axis=0)
-    tight_border_areas = np.concatenate([o[2][2] for o in output], axis=0)
-    tight_interior_areas = np.concatenate([o[2][1] for o in output], axis=0)
-    tight_full_means = np.concatenate([o[3][0] for o in output], axis=0)
-    tight_border_means = np.concatenate([o[3][2] for o in output], axis=0)
-    tight_interior_means = np.concatenate([o[3][1] for o in output], axis=0)
+    FreeLibrary(libSpaCE._handle)
+    del libSpaCE
     
-    update_progress(1)
+    '''
+    // packing of computed data
+    float *loose_full_areas     = &areas_out[n*0];
+    float *loose_interior_areas = &areas_out[n*1];
+    float *loose_border_areas   = &areas_out[n*2];
+    float *tight_full_areas     = &areas_out[n*3];
+    float *tight_interior_areas = &areas_out[n*4];
+    float *tight_border_areas   = &areas_out[n*5];
+
+    float *loose_full_means     = &means_out[(n*nc)*0];
+    float *loose_interior_means = &means_out[(n*nc)*1];
+    float *loose_border_means   = &means_out[(n*nc)*2];
+    float *tight_full_means     = &means_out[(n*nc)*3];
+    float *tight_interior_means = &means_out[(n*nc)*4];
+    float *tight_border_means   = &means_out[(n*nc)*5];
+    '''
     
-    print('  Compute morphological channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
-    
-    return ([loose_full_areas, loose_interior_areas, loose_border_areas], [loose_full_means, loose_interior_means, loose_border_means]),\
-           ([tight_full_areas, tight_interior_areas, tight_border_areas], [tight_full_means, tight_interior_means, tight_border_means])
+    return ([areas[0], areas[1], areas[2]], [means[0], means[1], means[2]]), ([areas[3], areas[4], areas[5]], [means[3], means[4], means[5]])
   
   def compute_centroids(self):
     if self.centroids is None or self.rois is None:
