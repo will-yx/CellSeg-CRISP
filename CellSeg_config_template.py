@@ -26,13 +26,10 @@ class CSConfig():
     ---------OUTPUT PATHS-------------
     IMAGEJ_OUTPUT_PATH - path to output imagej .txt files
     QUANTIFICATION_OUTPUT_PATH - path to output .csv and .fcs quantifications
-    VISUAL_OUTPUT_PATH - path to output visual masks as pngs.
-
-    Note:  Unfortunately, ImageJ provides no way to export to the .roi file format needed to import into ImageJ.  Additionally, we can't
-    use numpy in ImageJ scripts.  Thus, we need to write to file and read in (using the included imagej.py script) using the ImageJ
-    scripter if we pick output to imagej_text_file
+    VISUAL_OUTPUT_PATH - path to output visual masks as pngs
     '''
-    # Change these!
+    
+    # change these!
     IS_CODEX_OUTPUT = True
     NUCLEAR_CHANNEL_NAME = 'DRAQ5'
     NUCLEAR_CYCLE = 18
@@ -46,21 +43,32 @@ class CSConfig():
     else:
       synthesize_nuclear_image = None # to disable the synthesized nuclear image
     
-    GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks [0,1,1.5,2,...] or negative
+    # nuclei detection parameters
+    BOOST = 1 # brightness multiplier for nuclear channel during segmentation
+    MIN_AREA = 40 # minimum area in pixels for a detected object to be kept
+    INCREASE_FACTOR = 3.0 # size scaling factor for object detection - increase if you have smaller cells or low magnification and vice-versa
+    
+    # quantification parameters:
+    # dilate nuclear mask before quantification step
     GROWTH_PIXELS_PLANE = 0 # dilate cells on the plane_mask [0,1,1.5,2,2.5, ...]
+    
+    # adjacency quantification computes spillover between touching cells based on dilated cell masks
+    output_adjacency_quant = True # 'uncompensated' and 'compensated' outputs.  The compensated version has reduced spillover between neighboring cells
     GROWTH_PIXELS_QUANT_A = 0 # dilate cells during adjacency quantification [0,1,1.5,2,2.5, ...]
+    
+    # morphological quantification of signal on full/nuclear/peri-nuclear regions of cells
+    # nuclear masks are first dilated by the growth parameter to form the full area
+    # the interior and border regions are defined by the erosion of the full mask by the border thickness
+    output_morphological_quant = True # 'loose' and 'tight' quantification outputs.  The tight version has less spillover between neighboring cells
     GROWTH_PIXELS_QUANT_M = 2.5 # dilate cells during morphological quantification [0,0.5,1,1.5,2,2.5, ...]
     BORDER_PIXELS_QUANT_M = 2.0 # thickness of border during morphological quantification [1,1.5,2,2.5, ...]
-    output_adjacency_quant = True
-    output_morphological_quant = True
+    
+    # don't change these values unless you know what you're doing!
     OUTPUT_METHOD = 'all'
-    BOOST = 1
+    OVERLAP = 80 # pixels of overlap between subdivided tiles used in the nuclei detection step - should be more than the max diameter of a nucleus
+    GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks [0,1,1.5,2,...] or negative
     
-    OVERLAP = 80
-    MIN_AREA = 40
-    INCREASE_FACTOR = 3.0
-    
-    # Probably don't change this, except the valid image extensions when working with unique extensions.
+    # probably don't change this, except the valid image extensions when working with unique extensions
     def __init__(self, input_path, increase_factor=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None, nuclear_cycle=None, nuclear_channel=None, nuclear_slice=None):
       if increase_factor is not None: self.INCREASE_FACTOR = increase_factor
       if growth_plane is not None: self.GROWTH_PIXELS_PLANE = growth_plane
