@@ -402,7 +402,6 @@ class CVMask():
     c_means = means.ctypes.data_as(POINTER(c_float))
     
     libSpaCE = CDLL('./SpaCE.dll')
-    #libSpaCE = CDLL('C:/Users/Colin/Documents/Programming/CUDA programs/bin/win64/Release/SpaCE.dll')
     
     c_quantify_masks_across_channels = libSpaCE.quantify_masks_across_channels
     c_quantify_masks_across_channels.restype = None
