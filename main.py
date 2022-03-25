@@ -152,10 +152,10 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       tf.keras.backend.clear_session()
       cuda.get_current_device().reset()
       
-      print('Detect cells: {:.1f}s'.format(timer()-t0)); t0=timer()
+      print(f'Detect cells: {timer()-t0:.1f}s'); t0=timer()
       
       if cf.GROWTH_PIXELS_MASKS:
-        print('Growing each cell by {} pixels'.format(cf.GROWTH_PIXELS_MASKS))
+        print(f'Growing each cell by {cf.GROWTH_PIXELS_MASKS} pixels')
         cvutils.dilate_masks(rois, masks, scores, h, w, rows, cols, cf.OVERLAP, cf.GROWTH_PIXELS_MASKS)
       
       mask = stitcher.stitch_masks_plane(rois, masks, scores, rows, cols, h, w)
@@ -167,20 +167,20 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     stitched_mask = CVMask(mask)
     
     n = stitched_mask.n_instances
-    print(n, 'cell masks found by segmenter')
+    print(f'{n} cells found by segmenter')
     if n == 0:
-      print('No cells found in', filename)
+      print(f'No cells found in {filename}')
       return
     
     if cf.GROWTH_PIXELS_PLANE:
-      print('Growing cells by {} pixels'.format(cf.GROWTH_PIXELS_PLANE))
+      print(f'Growing cells by {cf.GROWTH_PIXELS_PLANE} pixels')
       stitched_mask.greydilate(cf.GROWTH_PIXELS_PLANE)
-      print('Grow plane mask: {:.1f}s'.format(timer()-t0)); t0=timer()
+      print(f'Grow plane mask: {timer()-t0:.1f}s'); t0=timer()
     
     print('Computing cell centroids and ROIs')
     t0 = timer()
     stitched_mask.compute_centroids()
-    print('Compute centroids and ROIs: {:.1f}s'.format(timer()-t0)); t0=timer()
+    print(f'Compute centroids and ROIs: {timer()-t0:.1f}s'); t0=timer()
     
     if not os.path.exists(cf.IMAGEJ_OUTPUT_PATH): os.makedirs(cf.IMAGEJ_OUTPUT_PATH)
     if not os.path.exists(cf.VISUAL_OUTPUT_PATH): os.makedirs(cf.VISUAL_OUTPUT_PATH)
@@ -221,7 +221,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       
       if drc0 and drc1 and drca:
         image = cvutils.drcu(image, drc0, drc1, drca)
-        print('Uncompress dynamic range image stack: {:.1f}s'.format(timer()-t0)); t0=timer()
+        print(f'Uncompress dynamic range image stack: {timer()-t0:.1f}s'); t0=timer()
       
       centroids = stitched_mask.centroids
       xys = np.fliplr(np.around(centroids))
@@ -233,17 +233,17 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         ds = int(50 / (cf.INCREASE_FACTOR or 2))
         folded = generate_folded_image(image, ds)
         if cf.OUTPUT_METHOD == 'images' or cf.OUTPUT_METHOD == 'all':
-          Image.fromarray(folded).save(visual_path + '_folds_ds{:02d}.png'.format(ds))
+          Image.fromarray(folded).save(visual_path + f'_folds_ds{ds:02d}.png')
         image = np.concatenate([image, folded[:,:,None]], axis=-1)
         
-        print('Estimate tissue foldedness: {:.1f}s'.format(timer()-t0)); t0=timer()
+        print(f'Estimate tissue foldedness: {timer()-t0:.1f}s'); t0=timer()
       
       if cf.output_adjacency_quant:
         t0 = timer()
         
         areas, means_u, means_c = stitched_mask.quantify_channels_adjacency(image, cf.GROWTH_PIXELS_QUANT_A, grow_neighbors=False, normalize=True)
         
-        print('Quantify cells across channels (adjacency): {:.1f}s'.format(timer()-t0)); t0=timer()
+        print(f'Quantify cells across channels (adjacency): {timer()-t0:.1f}s'); t0=timer()
         
         metadata_list = np.array([reg, 1])
         metadata = np.column_stack([np.arange(1,1+n), np.broadcast_to(metadata_list, (n, len(metadata_list)))])
@@ -265,7 +265,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         ]
         
         # Output to .csv
-        ch_names = ['cyc{:03d}_ch{:03d}:{}'.format((i//4)+1,(i%4)+1,s) for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names = [f'cyc{(i//4)+1:03d}_ch{(i%4)+1:03d}:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
         cols = labels + ch_names
         
         pd.DataFrame(data_u, columns=cols).to_csv(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'uncompensated', outname + '_uncompensated.csv'), index=False)
@@ -275,24 +275,24 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'uncompensated', outname + '_uncompensated.fcs'), data_u, cols, split=':')
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH,   'compensated', outname +   '_compensated.fcs'), data_c, cols, split=':')
         
-        print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
+        print(f'Save measurements to csv and fcs: {timer()-t0:.1f}s'); t0=timer()
       
       if cf.output_morphological_quant:
         t0 = timer()
         
         QL, QT = stitched_mask.quantify_channels_morphological(image, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
         
-        print('Quantify cells across channels (morphological): {:.1f}s'.format(timer()-t0)); t0=timer()
+        #print(f'Quantify cells across channels (morphological): {timer()-t0:.1f}s'); t0=timer()
         
         metadata_list = np.array([reg, 1])
         metadata = np.column_stack([np.arange(1,1+n), np.broadcast_to(metadata_list, (n, len(metadata_list)))])
         zs = np.full([n,1], tile_z)
         
-        AL, ML = QL
+        AL, ML = QL # areas, means = quantification loose
         data_L_fib = np.concatenate([metadata, xys, zs, xys, AL[0][:,None], AL[1][:,None], AL[2][:,None], ML[0], ML[1], ML[2]], axis=1)
         data_L_f   = np.concatenate([metadata, xys, zs, xys, AL[0][:,None], ML[0]], axis=1)
         
-        AT, MT = QT
+        AT, MT = QT # areas, means = quantification tight
         data_T_fib = np.concatenate([metadata, xys, zs, xys, AT[0][:,None], AT[1][:,None], AT[2][:,None], MT[0], MT[1], MT[2]], axis=1)
         data_T_f   = np.concatenate([metadata, xys, zs, xys, AT[0][:,None], MT[0]], axis=1)
         
@@ -309,10 +309,10 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         ]
         
         # Output to .csv
-        ch_names   = ['cyc{:03d}_ch{:03d}:{}'.format((i//4)+1,(i%4)+1,s)  for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_f = ['cyc{:03d}_ch{:03d}f:{}'.format((i//4)+1,(i%4)+1,s) for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_i = ['cyc{:03d}_ch{:03d}i:{}'.format((i//4)+1,(i%4)+1,s) for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_b = ['cyc{:03d}_ch{:03d}b:{}'.format((i//4)+1,(i%4)+1,s) for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names   = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}:{s}'  for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_f = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}f:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_i = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}i:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_b = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}b:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
         cols_fib = labels + ['interior:interior', 'border:border'] + ch_names_f + [s + '_interior' for s in ch_names_i] + [s + '_border' for s in ch_names_b]
         cols_f   = labels + ch_names
         
