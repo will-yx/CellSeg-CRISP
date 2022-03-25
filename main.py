@@ -122,8 +122,8 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     nc = image.shape[2] if cf.N_DIMS > 2 else 1
     
     rundir = os.path.basename(os.path.normpath(indir))
-    #data_cache_file = f'X:/temp/CellSeg cache/{rundir}_{filename}_{h}x{w}_n{nuclear_index}_if{cf.INCREASE_FACTOR:.1f}_ma{cf.MIN_AREA}_gm{cf.GROWTH_PIXELS_MASKS}.npz'
-    data_cache_file = None
+    data_cache_file = f'CellSeg cache/{rundir}_{filename}_{h}x{w}_n{nuclear_index}_if{cf.INCREASE_FACTOR:.1f}_ma{cf.MIN_AREA}_gm{cf.GROWTH_PIXELS_MASKS}.npz'
+    #data_cache_file = None
     
     if data_cache_file and os.path.exists(data_cache_file):
       with np.load(data_cache_file) as data_cached:
@@ -161,8 +161,9 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       mask = stitcher.stitch_masks_plane(rois, masks, scores, rows, cols, h, w)
       
       if data_cache_file:
-        if not os.path.exists('X:/temp/CellSeg cache'): os.makedirs('X:/temp/CellSeg cache')
+        if not os.path.exists('CellSeg cache'): os.makedirs('CellSeg cache')
         np.savez_compressed(data_cache_file, data=mask)
+        print(f'Saved detected nuclei to cache file:\n  {data_cache_file}')
     
     stitched_mask = CVMask(mask)
     
