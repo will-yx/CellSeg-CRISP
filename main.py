@@ -115,7 +115,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         print('Using channel', cf.NUCLEAR_CHANNEL_NAME, 'from', len(cf.CHANNEL_NAMES), 'total to segment on')
         print('Channel names:')
         print(cf.CHANNEL_NAMES)
-    
+      
       nuclear_index = cvutils.get_channel_index(cf.NUCLEAR_CHANNEL_NAME, cf.CHANNEL_NAMES) if cf.N_DIMS in [3,4] else 0
       
       print(f'Using channel {nuclear_index+1} as nuclear image')
@@ -124,6 +124,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     
     h, w = nuclear_image.shape[:2]
     nc = image.shape[2] if cf.N_DIMS > 2 else 1
+    assert(len(cf.CHANNEL_NAMES) == nc)
     
     rundir = os.path.basename(os.path.normpath(indir))
     data_cache_file = f'CellSeg cache/{rundir}_{filename}_{h}x{w}_n{nuclear_index}_if{cf.INCREASE_FACTOR:.1f}_ma{cf.MIN_AREA}_gm{cf.GROWTH_PIXELS_MASKS}.npz'
