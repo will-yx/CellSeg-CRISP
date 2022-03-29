@@ -15,6 +15,8 @@ from _ctypes import FreeLibrary
 
 import matplotlib.pyplot as plt
 
+from timeit import default_timer as timer
+
 def showfour(a,b,c,d):
   fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 5), sharex=True, sharey=True)
   ax[0,0].imshow(a)
@@ -146,20 +148,20 @@ class CVMask():
     
     print('Quantifying {} cells across {} channels'.format(n, n_channels))
     
-    areas = np.zeros(n)
-    means_u = np.zeros((n, n_channels))
-    means_c = np.zeros((n, n_channels))
+    areas = np.zeros(n, dtype=np.float32)
+    means_u = np.zeros((n, n_channels), dtype=np.float32)
+    means_c = np.zeros((n, n_channels), dtype=np.float32)
     if n == 0:
       return areas, means_u, means_c
     
-    print('  Quantifing with cell growth of {} pixels'.format(grow))
+    print(f'  Quantifing with cell growth of {grow} pixels')
     
     neighbors4 = disk(1)
     neighbors8 = np.ones([3,3], dtype=np.uint8)
     firstgrowth = neighbors8 if abs(grow - round(grow)) > 0.4 else neighbors4
     
     grow = int(max(0, floor(grow)))
-    p = 1+grow
+    p = 1 + grow * (2 if grow_neighbors else 1)
     
     mask = np.pad(self.plane_mask, p, mode='constant')
     rois = self.rois
@@ -171,7 +173,6 @@ class CVMask():
       end = '\r' if progress < 1 else '\n'
       print('  [{0}] {1:.1f}%'.format( '#' * block + '-' * (bar_length - block), progress*100), end=end)
     
-    from timeit import default_timer as timer
     t0 = timer()
     
     print('  Performing spillover compensation')
@@ -193,7 +194,7 @@ class CVMask():
       
       if grow_neighbors:
         for g in range(grow):
-          neighbor_mask = grey_dilation(neighbor_mask, footprint=neighbors4 if g else firstgrowth) * (1-cellmask)
+          neighbor_mask = binary_dilation(neighbor_mask, neighbors4 if g else firstgrowth) * (1-cellmask)
       
       for g in range(grow):
         cellmask = binary_dilation(cellmask, neighbors4 if g else firstgrowth) * (1-neighbor_mask)
@@ -309,7 +310,6 @@ class CVMask():
       end = '\r' if progress < 1 else '\n'
       print('  [{0}] {1:.1f}%'.format( '#' * block + '-' * (bar_length - block), progress*100), end=end)
     
-    from timeit import default_timer as timer
     t0 = timer()
     
     shown = 0
@@ -381,12 +381,6 @@ class CVMask():
     assert(mask.shape[0] == h)
     assert(mask.shape[1] == w)
     
-    print(f'Quantifying {n} cells across {nc} channels')
-    print(f'Quantifing with cell growth of {growth:.1f} pixels, border of {border:.1f} pixels')
-    
-    areas = np.ascontiguousarray(np.empty((6,n   ), dtype=np.float32))
-    means = np.ascontiguousarray(np.empty((6,n,nc), dtype=np.float32))
-    
     assert( mask.data.c_contiguous)
     assert( rois.data.c_contiguous)
     assert(image.data.c_contiguous)
@@ -394,6 +388,12 @@ class CVMask():
     assert( mask.dtype == c_uint)
     assert( rois.dtype == c_int)
     assert(image.dtype == c_float)
+    
+    print(f'Quantifying {n} cells across {nc} channels')
+    print(f'Quantifing with cell growth of {growth:.1f} pixels, border of {border:.1f} pixels')
+    
+    areas = np.ascontiguousarray(np.empty((6,n   ), dtype=np.float32))
+    means = np.ascontiguousarray(np.empty((6,n,nc), dtype=np.float32))
     
     c_mask  =  mask.ctypes.data_as(POINTER(c_uint))
     c_rois  =  rois.ctypes.data_as(POINTER(c_int))
