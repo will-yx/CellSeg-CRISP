@@ -166,6 +166,15 @@ class CVMask():
     mask = np.pad(self.plane_mask, p, mode='constant')
     rois = self.rois
     
+    def printmaskb(mask):
+      print()
+      print('+'+ '─'*(2*mask.shape[1]-1) + '+')
+      lookup = ['.', '#', 'X', '@']
+      for row in mask.astype(np.uint8):
+        row = [lookup[int(x)] for x in row]
+        print('|' + ' '.join(row) + '|')
+      print('+'+ '─'*(2*mask.shape[1]-1) + '+')
+    
     def update_progress(progress):
       bar_length = 80
       block = int(round(bar_length * progress))
@@ -229,6 +238,17 @@ class CVMask():
       coords = np.array([(y1+y-p,x1+x-p) for y,x in zip(*coords) if y1+y-p>=0 and x1+x-p>=0 and y1+y-p<h and x1+x-p<w])
       areas[idx] = len(coords)
       if areas[idx]: means_u[idx] = np.mean(image[coords[:,0],coords[:,1],:], axis=0)
+      
+      if 0 and idx==15:
+        print("  cid: {:6d}\t[{:4d}:{:4d},{:4d}:{:4d}]\tarea: {:d}".format(id, y1,y2,x1,x2, area));
+        perimeter_mask = cellmask * (1-eroded)
+        printmaskb(cellmask)
+        printmaskb(neighbor_mask)
+        printmaskb(eroded)
+        printmaskb(perimeter_mask)
+        print(perimeter)
+        print(areas[idx])
+        asdfsdfsdf
     
     update_progress(1)
     A = A.tocsc() # convert to CSC format for faster operations
