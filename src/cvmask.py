@@ -265,7 +265,7 @@ class CVMask():
     for c in range(nc):
       means_c[:,c] = lsqr(A, means_u[:,c], damp=0.0, show=False)[0]
     
-    means_c = np.maximum(solutions, 0)
+    means_c = np.maximum(means_c, 0)
     
     print('  Compute compensated channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
     
