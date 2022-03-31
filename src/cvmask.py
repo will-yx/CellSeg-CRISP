@@ -208,6 +208,12 @@ class CVMask():
       for g in range(grow):
         cellmask = binary_dilation(cellmask, neighbors4 if g else firstgrowth) * (1-neighbor_mask)
       
+      # clear mask pixels outside image boundaries
+      if y1 < p: cellmask[0:p-y1,:] = 0
+      if y2 > h-1-p: cellmask[-(y2-(h-1-p)):,:] = 0
+      if x1 < p: cellmask[:,0:p-x1] = 0
+      if x2 > w-1-p: cellmask[:,-(x2-(w-1-p)):] = 0
+        
       eroded = binary_erosion(cellmask, structure=neighbors4)
       perimeter = np.count_nonzero(cellmask) - np.count_nonzero(eroded)
       
@@ -239,9 +245,11 @@ class CVMask():
       areas[idx] = len(coords)
       if areas[idx]: means_u[idx] = np.mean(image[coords[:,0],coords[:,1],:], axis=0)
       
-      if 0 and idx==15:
+      if 0 and idx==0:
         print("  cid: {:6d}\t[{:4d}:{:4d},{:4d}:{:4d}]\tarea: {:d}".format(id, y1,y2,x1,x2, area));
         perimeter_mask = cellmask * (1-eroded)
+        printmaskb((local == id)) # raw cellmask
+        printmaskb((local>0) * (1-(local == id))) # raw neighbor_mask
         printmaskb(cellmask)
         printmaskb(neighbor_mask)
         printmaskb(eroded)
