@@ -269,6 +269,93 @@ class CVMask():
     
     print('  Compute compensated channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
     
+    return areas, means_u, means_c, A
+  
+  def quantify_channels_adjacency_c(self, image, growth=0, grow_neighbors=False, normalize=True):
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.linalg import lsqr
+    
+    def update_progress(progress):
+      bar_length = 80
+      block = int(round(bar_length * progress))
+      
+      end = '\r' if progress < 1 else '\n'
+      print('  [{0}] {1:.1f}%'.format( '#' * block + '-' * (bar_length - block), progress*100), end=end)
+    
+    t0 = timer()
+    
+    mask = np.ascontiguousarray(self.plane_mask, dtype=np.uint32)
+    rois = np.ascontiguousarray(self.rois, dtype=np.int32)
+    
+    n = self.n_instances
+    h, w, nc = image.shape
+    
+    assert(mask.shape[0] == h)
+    assert(mask.shape[1] == w)
+    
+    assert( mask.data.c_contiguous)
+    assert( rois.data.c_contiguous)
+    assert(image.data.c_contiguous)
+    
+    assert( mask.dtype == c_uint)
+    assert( rois.dtype == c_int)
+    assert(image.dtype == c_float)
+    
+    areas   = np.ascontiguousarray(np.zeros((n), dtype=np.float32))
+    means_u = np.ascontiguousarray(np.zeros((n, nc), dtype=np.float32))
+    means_c = np.ascontiguousarray(np.zeros((n, nc), dtype=np.float32))
+    if n < 1:
+      return areas, means_u, means_c
+    
+    print(f'Quantifying {n} cells across {nc} channels')
+    print(f'  Quantifing with cell growth of {growth} pixels')
+    
+    c_mask  =  mask.ctypes.data_as(POINTER(c_uint))
+    c_rois  =  rois.ctypes.data_as(POINTER(c_int))
+    c_img   = image.ctypes.data_as(POINTER(c_float))
+    
+    c_area = areas.ctypes.data_as(POINTER(c_float))
+    c_mean = means_u.ctypes.data_as(POINTER(c_float))
+    c_rows = POINTER(c_int)()
+    c_cols = POINTER(c_int)()
+    c_vals = POINTER(c_float)()
+    
+    libSpaCE = CDLL('SpaCE.dll')
+    
+    c_compute_spillover_matrix = libSpaCE.compute_spillover_matrix
+    c_compute_spillover_matrix.restype = c_uint
+    c_compute_spillover_matrix.argtypes = [POINTER(c_uint), POINTER(c_int), POINTER(c_float), c_int, c_int, c_int, c_int, c_float, c_int, POINTER(c_float), POINTER(c_float), POINTER(POINTER(c_int)), POINTER(POINTER(c_int)), POINTER(POINTER(c_float))]
+    
+    mode = (1 if normalize else 0) + (2 if grow_neighbors else 0)
+    count = c_compute_spillover_matrix(c_mask, c_rois, c_img, nc, w, h, n, growth, mode, c_area, c_mean, byref(c_rows), byref(c_cols), byref(c_vals))
+    
+    if count < 1:
+      FreeLibrary(libSpaCE._handle)
+      del libSpaCE
+      raise ValueError(f'Error, adjacency matrix has {count} entries!')
+    
+    [rows, cols, vals] = [np.ctypeslib.as_array(x, shape=(count,)) for x in [c_rows, c_cols, c_vals]]
+    
+    A = coo_matrix((vals, (rows, cols)), shape=(n, n), dtype=np.float32).tocsc()
+    
+    # calling this function again with null values will free the three allocated buffers
+    c_compute_spillover_matrix(None, None, None, 0, 0, 0, 0, 0, 0, None, None, byref(c_rows), byref(c_cols), byref(c_vals))
+    
+    FreeLibrary(libSpaCE._handle)
+    del libSpaCE
+    
+    print('  Generate adjacency matrix: {:.1f}s'.format(timer()-t0)); t0=timer()
+    
+    for c in range(nc):
+      update_progress(c/nc)
+      means_c[:,c] = lsqr(A, means_u[:,c], damp=0.0, show=False)[0]
+    
+    means_c = np.maximum(means_c, 0)
+    
+    update_progress(1)
+    
+    print('  Compute compensated channel means: {:.1f}s'.format(timer()-t0)); t0=timer()
+    
     return areas, means_u, means_c
   
   

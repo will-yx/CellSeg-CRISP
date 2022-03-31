@@ -247,7 +247,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       if cf.output_adjacency_quant:
         t0 = timer()
         
-        areas, means_u, means_c = stitched_mask.quantify_channels_adjacency(image, cf.GROWTH_PIXELS_QUANT_A, grow_neighbors=False, normalize=True)
+        areas, means_u, means_c = stitched_mask.quantify_channels_adjacency_c(image, cf.GROWTH_PIXELS_QUANT_A, grow_neighbors=False, normalize=True)
         
         print(f'Quantify cells across channels (adjacency): {timer()-t0:.1f}s'); t0=timer()
         
