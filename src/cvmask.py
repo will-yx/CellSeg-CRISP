@@ -138,7 +138,7 @@ class CVMask():
     from scipy.sparse import lil_matrix
     from scipy.sparse.linalg import lsqr
     
-    h, w, n_channels = image.shape
+    h, w, nc = image.shape
     mask_height, mask_width = self.plane_mask.shape
     
     assert(mask_height == h)
@@ -146,11 +146,11 @@ class CVMask():
     
     n = self.n_instances
     
-    print('Quantifying {} cells across {} channels'.format(n, n_channels))
+    print('Quantifying {} cells across {} channels'.format(n, nc))
     
     areas = np.zeros(n, dtype=np.float32)
-    means_u = np.zeros((n, n_channels), dtype=np.float32)
-    means_c = np.zeros((n, n_channels), dtype=np.float32)
+    means_u = np.zeros((n, nc), dtype=np.float32)
+    means_c = np.zeros((n, nc), dtype=np.float32)
     if n == 0:
       return areas, means_u, means_c
     
@@ -262,9 +262,8 @@ class CVMask():
     A = A.tocsc() # convert to CSC format for faster operations
     print('  Generate adjacency matrix: {:.1f}s'.format(timer()-t0)); t0=timer()
     
-    solutions = np.empty_like(means_u)
-    for c in range(n_channels):
-      solutions[:,c] = lsqr(A, means_u[:,c], damp=0.0, show=False)[0]
+    for c in range(nc):
+      means_c[:,c] = lsqr(A, means_u[:,c], damp=0.0, show=False)[0]
     
     means_c = np.maximum(solutions, 0)
     
