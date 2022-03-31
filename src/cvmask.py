@@ -271,6 +271,7 @@ class CVMask():
     
     return areas, means_u, means_c
   
+  
   def quantify_channels_morphological(self, image, growth=0, border=2):
     from skimage.morphology import disk
     from scipy.ndimage.morphology import binary_dilation, binary_erosion
@@ -278,12 +279,12 @@ class CVMask():
     
     border = max(border, 1)
     
-    print(f'Quantifying {n} cells across {nc} channels')
-    print(f'Quantifing with cell growth of {growth:.1f} pixels, border of {border:.1f} pixels')
-    
     n = self.n_instances
     h, w, nc = image.shape
     mask_height, mask_width = self.plane_mask.shape
+    
+    print(f'Quantifying {n} cells across {nc} channels')
+    print(f'Quantifing with cell growth of {growth:.1f} pixels, border of {border:.1f} pixels')
     
     assert(mask_height == h)
     assert(mask_width  == w)
