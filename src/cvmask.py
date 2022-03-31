@@ -428,13 +428,13 @@ class CVMask():
     c_areas = areas.ctypes.data_as(POINTER(c_float))
     c_means = means.ctypes.data_as(POINTER(c_float))
     
-    libSpaCE = CDLL('./SpaCE.dll')
+    libSpaCE = CDLL('SpaCE.dll')
     
-    c_quantify_masks_across_channels = libSpaCE.quantify_masks_across_channels
-    c_quantify_masks_across_channels.restype = None
-    c_quantify_masks_across_channels.argtypes = [POINTER(c_uint), POINTER(c_int), POINTER(c_float), c_int, c_int, c_int, c_int, c_float, c_float, POINTER(c_float), POINTER(c_float)]
+    c_quantify_masks_morphological = libSpaCE.quantify_masks_morphological
+    c_quantify_masks_morphological.restype = None
+    c_quantify_masks_morphological.argtypes = [POINTER(c_uint), POINTER(c_int), POINTER(c_float), c_int, c_int, c_int, c_int, c_float, c_float, POINTER(c_float), POINTER(c_float)]
     
-    c_quantify_masks_across_channels(c_mask, c_rois, c_img, nc, w, h, n, growth, border, c_areas, c_means)
+    c_quantify_masks_morphological(c_mask, c_rois, c_img, nc, w, h, n, growth, border, c_areas, c_means)
     
     FreeLibrary(libSpaCE._handle)
     del libSpaCE
