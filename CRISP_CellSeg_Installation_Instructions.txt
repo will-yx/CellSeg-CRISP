@@ -1,0 +1,55 @@
+Installation instructions:
+From a fresh install of Windows 10
+
+Install Notepad++
+Install Fiji
+  Bio-Formats Plugin Configuration
+  Formats
+  Tagged Image File Format
+  [x] Windowless
+
+Install libvips 8.11:
+  Use version x64-web-8.11.4
+  https://github.com/libvips/build-win64-mxe/releases/download/v8.11.4/vips-dev-w64-web-8.11.4.zip
+  Unzip and move the 8.11 directory to "C:/Program Files"
+
+
+Note: Generally you can install the Windows 10 versions of CUDA, but can try server versions if appropriate
+
+CUDA 10.0:
+  Download CUDA Toollit (https://developer.nvidia.com/cuda-10.0-download-archive)
+  Install CUDA Toolkit 10.0 (cuda_10.0.130_411.31_win10.exe)
+  Download cuDNN (https://developer.nvidia.com/rdp/cudnn-archive)
+  Install cuDNN v7.6.5 (cudnn-10.0-windows10-x64-v7.6.5.32.zip)
+
+CUDA 11.2:
+  Download CUDA Toolkit (https://developer.nvidia.com/cuda-11.2.2-download-archive)
+  Install CUDA Toolkit 11.2 Update 2
+  Download cuDNN (https://developer.nvidia.com/rdp/cudnn-archive)
+  Install cuDNN v8.2.1 (cudnn-11.3-windows-x64-v8.2.1.32.zip)
+
+
+Install Miniconda3 Windows 64-bit (https://docs.conda.io/en/latest/miniconda.html)
+
+Open an Anaconda prompt
+conda create --name CellSeg --file CellSeg_conda_requirements.txt
+  (Note: only python 3.7.11 was available, not 3.7.12 or 3.7.13)
+conda activate CellSeg
+pip install -r CellSeg_pip_requirements.txt
+
+Install Microsoft Visual C++ Redistributable Latest Supported Downloads
+Visual Studio 2015, 2017, 2019, and 2022 (https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
+Edit environment variables:
+Add to PATH: C:\Program Files\vips-dev-8.11\bin
+(CUDA_PATH is 11.2)
+
+
+CRISP setup:
+cd <location of CRISP-CODEX-Processor>
+conda create -n CRISP python=3.8.13
+pip install -r requirements.txt
+
+* If your miniconda3 installation is not located in your home directory
+  or if you chose a different name for your CRISP environment then
+  you must edit conda_activate_CRISP.bat to point to the correct location
