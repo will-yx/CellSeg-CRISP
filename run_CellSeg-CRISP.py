@@ -8,21 +8,20 @@ def run_single(indir, file_index):
   main(indir, file_index)
 
 def run(indir):
-  num_devices = int(sys.argv[2]) if len(sys.argv) > 2 else 2
-  use_device = int(sys.argv[1]) % num_devices if len(sys.argv) > 1 else -1
+  use_device  = int(sys.argv[1]) if len(sys.argv) > 1 else -1
+  num_devices = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+  start_region = int(sys.argv[3]) if len(sys.argv) > 3 else (use_device % num_devices)+1
+  
   if use_device >= 0: os.environ['CUDA_VISIBLE_DEVICES'] = str(use_device)
+  print(f'Using CUDA device {use_device} of {num_devices}')
   
-  print(f'Using CUDA device {use_device}')
-  
-  for reg in range(1,99):
-    if use_device >= 0 and reg%num_devices != use_device: continue
-    
+  for reg in range(start_region, 99, num_devices):
     if not os.path.exists(os.path.join(indir, 'stitched', f'region{reg:03d}_registration.bin')): break
     p = Process(target=run_single, args=(indir, reg-1))
     p.start()
     p.join()
   
-  if 1:
+  if start_region == 1:
     dice_masks(indir)
 
 if __name__ == '__main__':
