@@ -180,7 +180,7 @@ def dispatch_jobs(d_in, d_out, joblist, gx, gy, border, max_threads=1):
     p.join()
     
 
-def main(indir, config=None):
+def main(indir, region=None, config=None):
   config = config or toml.load(os.path.join(indir, 'CRISP_config.toml'))
   
   outdir = os.path.join(indir, 'processed/segm/segm-1/masks')
@@ -192,7 +192,7 @@ def main(indir, config=None):
   
   minz = {1}    # first slice to save
   maxz = {zout} # duplicate output for each z in range [minz, maxz]
-  regions = {reg+1 for reg in range(nreg)}
+  regions = {region} if region else {reg+1 for reg in range(nreg)}
   
   max_threads = 1
   

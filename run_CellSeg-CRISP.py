@@ -8,8 +8,8 @@ def run_single(indir, file_index):
   main(indir, file_index)
 
 def run(indir):
-  use_device  = int(sys.argv[1]) if len(sys.argv) > 1 else -1
-  num_devices = int(sys.argv[2]) if len(sys.argv) > 2 else 1
+  use_device   = int(sys.argv[1]) if len(sys.argv) > 1 else -1
+  num_devices  = int(sys.argv[2]) if len(sys.argv) > 2 else 1
   start_region = int(sys.argv[3]) if len(sys.argv) > 3 else (use_device % num_devices)+1
   
   if use_device >= 0: os.environ['CUDA_VISIBLE_DEVICES'] = str(use_device)
@@ -20,10 +20,9 @@ def run(indir):
     p = Process(target=run_single, args=(indir, reg-1))
     p.start()
     p.join()
+    
+    dice_masks(indir, reg)
   
-  if start_region == 1:
-    dice_masks(indir)
-
 if __name__ == '__main__':
   __spec__ = None
   
