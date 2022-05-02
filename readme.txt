@@ -16,6 +16,7 @@ Windows installation steps
     Create a new environment
       conda create --name CellSeg --file CellSeg_conda_requirements.txt
       conda activate CellSeg
+      pip install -r CellSeg_pip_requirements.txt
 
 Running CellSeg-CRISP
 **This branch of CellSeg is optimized for CRISP outputs and file structure**

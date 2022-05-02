@@ -48,7 +48,7 @@ Add to PATH: C:\Program Files\vips-dev-8.11\bin
 CRISP setup:
 cd <location of CRISP-CODEX-Processor>
 conda create -n CRISP python=3.8.13
-pip install -r requirements.txt
+pip install -r CellSeg_pip_requirements.txt
 
 * If your miniconda3 installation is not located in your home directory
   or if you chose a different name for your CRISP environment then
