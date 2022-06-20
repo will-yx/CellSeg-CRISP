@@ -63,7 +63,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
   growth = '_us{:.1f}_grow{:.1f}x{:.1f}x{:.1f}b{:.1f}'.format(cf.INCREASE_FACTOR, cf.GROWTH_PIXELS_MASKS, cf.GROWTH_PIXELS_PLANE, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
   
   if region_index is not None and cf.FILENAMES:
-    cf.FILENAMES = [cf.FILENAMES[region_index]] if len(cf.FILENAMES) > region_index else []
+    cf.FILENAMES = [cf.FILENAMES[region_index]] if region_index < len(cf.FILENAMES) else []
   
   for count, filename in enumerate(cf.FILENAMES):
     t0_file = t0 = timer()
@@ -133,6 +133,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     if data_cache_file and os.path.exists(data_cache_file):
       with np.load(data_cache_file) as data_cached:
         mask = data_cached['data']
+        print(f'\nLoaded cell masks from cache file: {data_cache_file}')
     else:
       print('\nSegmenting with CellSeg-CRISP:', filename); t0=timer()
       
