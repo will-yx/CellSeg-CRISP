@@ -229,6 +229,8 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       if drc0 and drc1 and drca:
         image = cvutils.drcu(image, drc0, drc1, drca)
         print(f'Uncompress dynamic range image stack: {timer()-t0:.1f}s'); t0=timer()
+      else:
+        image = image.astype(np.float32)
       
       centroids = stitched_mask.centroids
       xys = np.fliplr(np.around(centroids))
