@@ -186,12 +186,12 @@ def extract_stitched_information(filename):
     except:
       raise NameError('Looks like at least one filename is not in the expected format.  Stitched mosaics look like \'mosaic_region2_ch03.tif\'')
 
-def stitched_folder_read_method(folder, load=True, filter=None):
+def stitched_folder_read_method(folder, prefix_length=17, load=True, filter=None):
   filter = filter or (lambda *_: True)
   
   if folder.endswith('.tif'):
     folder, fname = os.path.split(folder)
-    prefix = fname[0:17]
+    prefix = fname[0:prefix_length]
     files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and f.startswith(prefix) and filter(f)])
   else:
     files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and not f.startswith('.') and filter(f)])
@@ -279,8 +279,6 @@ def tiles_folder_read_method(folder, load=True, filter=None):
   print(stack.shape)
   stack = stack.swapaxes(1,2).reshape(hc, wc, -1)
   print(stack.shape)
-  
-  #stack = stack[1000:2000,1000:2000,:]
   
   return stack
 
