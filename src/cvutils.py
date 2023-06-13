@@ -303,6 +303,10 @@ def meta_from_image(filename, filter=None):
     ext = 'tif'
     read_method = lambda f, **kw: tiles_folder_read_method(f, **kw, filter=filter)
     image = np.array(read_method(filename, load=False))
+  elif '/raw data/' in path:
+    ext = 'tif'
+    read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter, prefix_length=7)
+    image = np.array(read_method(filename, load=False))
   else:
     ext = filename[-3:]
     read_method = skimage.io.imread
