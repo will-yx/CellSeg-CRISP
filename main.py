@@ -52,6 +52,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
   tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
   
   cf = CSConfig(indir, increase_factor, growth_plane, growth_quant_A, growth_quant_M, border_quant_M)
+  ch_per_cy = getattr(cf, 'CH_PER_CY', 4)
   
   print('Initializing CVSegmenter at', cf.DIRECTORY_PATH)
   
@@ -272,7 +273,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         ]
         
         # Output to .csv
-        ch_names = [f'cyc{(i//4)+1:03d}_ch{(i%4)+1:03d}:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i%ch_per_cy)+1:03d}:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
         cols = labels + ch_names
         
         pd.DataFrame(data_u, columns=cols).to_csv(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'uncompensated', outname + '_uncompensated.csv'), index=False)
@@ -315,10 +316,10 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         ]
         
         # Output to .csv
-        ch_names   = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}:{s}'  for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_f = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}f:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_i = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}i:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_b = [f'cyc{(i//4)+1:03d}_ch{(i//4)+1:03d}b:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names   = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}:{s}'  for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_f = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}f:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_i = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}i:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_b = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}b:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
         cols_fib = labels + ['interior:interior', 'border:border'] + ch_names_f + [s + '_interior' for s in ch_names_i] + [s + '_border' for s in ch_names_b]
         cols_f   = labels + ch_names
         

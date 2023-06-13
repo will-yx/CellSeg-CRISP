@@ -2,6 +2,7 @@
 # ---------------------------
 # Wrapper class for masks.  See class doc for details.
 
+import os
 import numpy as np
 from math import floor
 from scipy.spatial import distance
@@ -17,6 +18,7 @@ import matplotlib.pyplot as plt
 
 from timeit import default_timer as timer
 
+if os.name=='nt':
 def showfour(a,b,c,d):
   fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 5), sharex=True, sharey=True)
   ax[0,0].imshow(a)
