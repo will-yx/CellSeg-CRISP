@@ -125,6 +125,8 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     
     h, w = nuclear_image.shape[:2]
     nc = image.shape[2] if cf.N_DIMS > 2 else 1
+    print(image.shape)
+    print(len(cf.CHANNEL_NAMES))
     assert(len(cf.CHANNEL_NAMES) == nc)
     
     rundir = os.path.basename(os.path.normpath(indir))
