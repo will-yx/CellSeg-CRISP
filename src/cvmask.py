@@ -19,6 +19,15 @@ import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 
 if os.name=='nt':
+  libc = cdll.msvcrt
+  CRISP_path = os.path.join(os.getcwd(),'CRISP.dll')
+  if os.path.isfile(CRISP_path):
+    if hasattr(os, 'add_dll_directory'):
+      for p in os.getenv('PATH').split(';'):
+        if p not in ['','.'] and os.path.isdir(p): os.add_dll_directory(p)
+  else: print('Unable to find CRISP.dll')
+
+
 def showfour(a,b,c,d):
   fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 5), sharex=True, sharey=True)
   ax[0,0].imshow(a)
@@ -322,7 +331,7 @@ class CVMask():
     c_cols = POINTER(c_int)()
     c_vals = POINTER(c_float)()
     
-    libSpaCE = CDLL('SpaCE.dll')
+    libSpaCE = CDLL('./SpaCE.dll')
     
     c_compute_spillover_matrix = libSpaCE.compute_spillover_matrix
     c_compute_spillover_matrix.restype = c_uint
@@ -518,7 +527,7 @@ class CVMask():
     c_areas = areas.ctypes.data_as(POINTER(c_float))
     c_means = means.ctypes.data_as(POINTER(c_float))
     
-    libSpaCE = CDLL('SpaCE.dll')
+    libSpaCE = CDLL('./SpaCE.dll')
     
     c_quantify_masks_morphological = libSpaCE.quantify_masks_morphological
     c_quantify_masks_morphological.restype = None
@@ -557,7 +566,7 @@ class CVMask():
       self.centroids = np.empty([n,2], dtype=np.float32)
       self.rois = np.empty([n,4], dtype=np.int32)
       
-      libSpaCE = CDLL('SpaCE.dll')
+      libSpaCE = CDLL('./SpaCE.dll')
       
       c_centroids_rois = libSpaCE.centroids_and_rois_from_flat_mask
       c_centroids_rois.restype = None

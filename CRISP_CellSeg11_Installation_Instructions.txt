@@ -1,0 +1,53 @@
+Installing CellSeg for Ampere and later (30XX, 40XX, etc) GPUs
+
+Installation instructions:
+From a fresh install of Windows 10/11
+
+Install Notepad++
+Install Fiji
+  Bio-Formats Plugin Configuration
+  Formats
+  Tagged Image File Format
+  [x] Windowless
+
+Install libvips (recommend 8.13 or newer):
+  Use version x64-web-8.13.3
+  https://github.com/libvips/build-win64-mxe/releases/download/v8.13.3/vips-dev-w64-web-8.13.3.zip
+  Unzip and move the vips-dev-8.13 directory to "C:/Program Files"
+  Add C:\Program Files\vips-dev-8.13\bin to the system PATH
+
+Install CUDA Toolkit 11.8:
+  https://developer.nvidia.com/cuda-11-8-0-download-archive?target_os=Windows&target_arch=x86_64
+
+Install CudNN 8.9.1: 
+  https://developer.nvidia.com/downloads/compute/cudnn/secure/8.9.1/local_installers/11.8/cudnn-windows-x86_64-8.9.1.23_cuda11-archive.zip
+  Download cudnn-windows-x86_64-8.9.1.23_cuda11-archive.zip and merge with CUDA 11.8
+  Install zlib (http://www.winimage.com/zLibDll/zlib123dllx64.zip) (to C:/Program Files/zlib for example)
+  Add zlib dll folder to PATH
+  Source: https://docs.nvidia.com/deeplearning/cudnn/install-guide/index.html#prerequisites-windows
+  
+
+
+Install Microsoft Visual C++ Redistributable Latest Supported Downloads
+Visual Studio 2015, 2017, 2019, and 2022 (https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
+Install Miniconda3 Windows 64-bit (https://docs.conda.io/en/latest/miniconda.html)
+
+Open an Anaconda prompt (not a WSL terminal - the CRISP/SpaCE dlls don't won't under linux)
+
+cd <location of CRISP-CODEX-Processor>
+
+conda create -n CellSeg11 python=3.8
+conda activate CellSeg11
+
+Install a tensorflow 1.15 version compatible with CUDA11:
+  Source: https://github.com/fo40225/tensorflow-windows-wheel/tree/master/1.15.4%2Bnv20.12/py38/CPU%2BGPU/cuda111cudnn8avx2
+  Download the four 7z parts and unzip to a .whl file
+  pip3 install tensorflow-1.15.4+nv-cp38-cp38-win_amd64.whl
+  
+Install the remaining python dependencies with pip:
+  pip3 install -r CellSeg11_pip_requirements.txt
+  
+* If your miniconda3 installation is not located in your home directory
+  or if you chose a different name for your CRISP environment then
+  you must edit conda_activate_CRISP.bat to point to the correct location
