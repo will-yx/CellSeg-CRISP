@@ -17,7 +17,7 @@ Install libvips 8.11:
 Note: Generally you can install the Windows 10 versions of CUDA, but can try server versions if appropriate
 
 CUDA 10.0:
-  Download CUDA Toollit (https://developer.nvidia.com/cuda-10.0-download-archive)
+  Download CUDA Toolkit (https://developer.nvidia.com/cuda-10.0-download-archive)
   Install CUDA Toolkit 10.0 (cuda_10.0.130_411.31_win10.exe)
   Download cuDNN (https://developer.nvidia.com/rdp/cudnn-archive)
   Install cuDNN v7.6.5 (cudnn-10.0-windows10-x64-v7.6.5.32.zip)
