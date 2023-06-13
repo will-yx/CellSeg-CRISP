@@ -18,16 +18,6 @@ import matplotlib.pyplot as plt
 
 from timeit import default_timer as timer
 
-if os.name=='nt':
-  libc = cdll.msvcrt
-  CRISP_path = os.path.join(os.getcwd(),'CRISP.dll')
-  if os.path.isfile(CRISP_path):
-    if hasattr(os, 'add_dll_directory'):
-      for p in os.getenv('PATH').split(';'):
-        if p not in ['','.'] and os.path.isdir(p): os.add_dll_directory(p)
-  else: print('Unable to find CRISP.dll')
-
-
 def showfour(a,b,c,d):
   fig, ax = plt.subplots(nrows=2, ncols=2, figsize=(8, 5), sharex=True, sharey=True)
   ax[0,0].imshow(a)

@@ -22,15 +22,6 @@ from PIL import Image
 from ctypes import *
 from _ctypes import FreeLibrary
 
-if os.name=='nt':
-  libc = cdll.msvcrt
-  CRISP_path = os.path.join(os.getcwd(),'CRISP.dll')
-  if os.path.isfile(CRISP_path):
-    if hasattr(os, 'add_dll_directory'):
-      for p in os.getenv('PATH').split(';'):
-        if p not in ['','.'] and os.path.isdir(p): os.add_dll_directory(p)
-  else: print('Unable to find CRISP.dll')
-
 # URL from which to download the latest COCO trained weights
 COCO_MODEL_URL = "https://github.com/matterport/Mask_RCNN/releases/download/v2.0/mask_rcnn_coco.h5"
 SIXTEEN_BIT_MAX = 65535

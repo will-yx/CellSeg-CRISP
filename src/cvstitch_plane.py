@@ -17,16 +17,6 @@ from _ctypes import FreeLibrary
 
 import matplotlib.pyplot as plt
 
-if os.name=='nt':
-  libc = cdll.msvcrt
-  CRISP_path = os.path.join(os.getcwd(),'CRISP.dll')
-  if os.path.isfile(CRISP_path):
-    if hasattr(os, 'add_dll_directory'):
-      for p in os.getenv('PATH').split(';'):
-        if p not in ['','.'] and os.path.isdir(p): os.add_dll_directory(p)
-  else: print('Unable to find CRISP.dll')
-
-
 def show(img):
   fig = plt.figure()
   ax = plt.Axes(fig, [0., 0., 1., 1.])
