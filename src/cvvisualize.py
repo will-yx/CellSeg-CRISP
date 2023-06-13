@@ -95,8 +95,8 @@ def save_mask_overlays(path, nuclear_image, plane_mask, rois):
     cv2.drawContours(out_image, contours, -1, colors[idx], 1, offset=(x1-1,y1-1))
     cv2.drawContours(out_masks, contours, -1, colors[idx], 1, offset=(x1-1,y1-1))
   
-  Image.fromarray(out_image).save(path + '_overlay.png')
-  Image.fromarray(out_masks).save(path + '_masks.png')
+  Image.fromarray(out_image).save(path + '_overlay.tiff', compression='tiff_lzw')
+  Image.fromarray(out_masks).save(path + '_masks.tiff', compression='tiff_lzw')
   print('Save images: {:.1f}s'.format(timer()-t0)); t0=timer()
   
 

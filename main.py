@@ -210,7 +210,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     if cf.OUTPUT_METHOD == 'images' or cf.OUTPUT_METHOD == 'all':
       print('Saving image output to', cf.VISUAL_OUTPUT_PATH)
       visual_path = os.path.join(cf.VISUAL_OUTPUT_PATH, outname) + growth
-      Image.fromarray(stitched_mask.plane_mask).save(visual_path + '_labeled.png')
+      Image.fromarray(stitched_mask.plane_mask).save(visual_path + '_labeled.tiff', compression='tiff_lzw')
       cvvisualize.save_mask_overlays(visual_path, nuclear_image, stitched_mask.plane_mask, stitched_mask.rois)
     
     stitched_region = 'mosaic' in filename or 'stitched' in filename
