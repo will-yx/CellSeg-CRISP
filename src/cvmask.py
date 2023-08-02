@@ -556,6 +556,12 @@ class CVMask():
       self.centroids = np.empty([n,2], dtype=np.float32)
       self.rois = np.empty([n,4], dtype=np.int32)
       
+      assert           mask.data.c_contiguous
+      assert      self.rois.data.c_contiguous
+      assert self.centroids.data.c_contiguous
+      
+      assert mask.dtype == c_uint
+      
       libSpaCE = CDLL('./SpaCE.dll')
       
       c_centroids_rois = libSpaCE.centroids_and_rois_from_flat_mask
