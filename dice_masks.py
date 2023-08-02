@@ -60,7 +60,7 @@ def free_libs(libs):
 def dice_mask(out, tid, job, indir, outdir, gx, gy, border):
   reg, cy, ch, sl = job
   
-  masks = glob(os.path.join(indir, f'*reg{reg:03d}*masks.png'))
+  masks = glob(os.path.join(indir, f'*reg{reg:03d}*masks.tiff'))
   if len(masks) != 1:
     out.put(f'{tid}> error: expected 1 image, but found {len(masks)}')
     return 1
