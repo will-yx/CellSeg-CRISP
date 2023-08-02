@@ -320,10 +320,10 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         ]
         
         # Output to .csv
-        ch_names   = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}:{s}'  for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_f = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}f:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_i = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}i:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
-        ch_names_b = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i//ch_per_cy)+1:03d}b:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names   = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i%ch_per_cy)+1:03d}:{s}'  for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_f = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i%ch_per_cy)+1:03d}f:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_i = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i%ch_per_cy)+1:03d}i:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
+        ch_names_b = [f'cyc{(i//ch_per_cy)+1:03d}_ch{(i%ch_per_cy)+1:03d}b:{s}' for i,s in enumerate(cf.CHANNEL_NAMES)]
         cols_fib = labels + ['interior:interior', 'border:border'] + ch_names_f + [s + '_interior' for s in ch_names_i] + [s + '_border' for s in ch_names_b]
         cols_f   = labels + ch_names
         
