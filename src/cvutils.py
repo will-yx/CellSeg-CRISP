@@ -29,7 +29,7 @@ SIXTEEN_BIT_MAX = 65535
 #  Packaged Segmenter
 ############################################################
 
-def drcu(image, drc0, drc1, drca):
+def drcu(image, drc0=60000, drc1=1000000, drca=779.72009277):
   assert(image.dtype == np.uint16)
   assert(drc0 < 65534)
   assert(drc1 > 65535)
