@@ -38,16 +38,12 @@ def show(img):
 
 def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
   print('Starting CellSeg-CRISP')
-  
-  sys.path.insert(0, indir)
+  print(indir)
+  sys.path.append(indir)
   from CSQuant_config import CSConfig
   
   cf = CSConfig(indir, growth_plane, growth_quant_A, growth_quant_M, border_quant_M)
   ch_per_cy = getattr(cf, 'CH_PER_CY', 4)
-  
-  #print('Initializing CVSegmenter at', cf.DIRECTORY_PATH)
-  
-  stitcher = CVMaskStitcher(overlap=cf.OVERLAP, min_area=cf.MIN_AREA)
   
   if cf.OUTPUT_METHOD not in ['imagej_text_file', 'statistics', 'images', 'all']:
     raise NameError('Output method is not supported.  Check the OUTPUT_METHOD variable in CellSeg_config.py.')
@@ -97,27 +93,33 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
     
     h, w = image.shape[:2]
     nc = image.shape[2] if cf.N_DIMS > 2 else 1
-    print(image.shape)
+
     print(len(cf.CHANNEL_NAMES))
     assert(len(cf.CHANNEL_NAMES) == nc)
     
     rundir = os.path.basename(os.path.normpath(indir))
+
     if os.path.isfile(os.path.join(indir, 'experiment.json')):
       with open(os.path.join(indir, 'experiment.json')) as json_file:
         run_name = json.load(json_file)['name']
-        outname = '{run_name}_reg{:03d}'.format(run_name, region_index+1)
+        outname = '{}_reg{:03d}'.format(run_name, region_index+1)
+    else: outname = '{}_reg{:03d}'.format(rundir, region_index+1)
 
     mask_cache_file = f'{mask_dir}/{outname}.npz'
     mask_tif_file = f'{mask_dir}/{outname}.tif'
+    
+    print(f"searching mask directory for {mask_cache_file} or {mask_tif_file}")
     
     if mask_cache_file and os.path.exists(mask_cache_file):
       with np.load(mask_cache_file) as data_cached:
         mask = data_cached['data']
         print(f'\nLoaded cell masks from cache file: {mask_cache_file}')
     elif mask_tif_file and os.path.exists(mask_tif_file):
-      mask = imread(mask_tif_file)      
+      mask = imread(mask_tif_file)  
+      print(f'\nLoaded cell masks from tif file: {mask_tif_file}')      
     else:
-      print('\nUnable to find mask file:', filename);
+      print('\nUnable to find mask file:', mask_tif_file);
+    print(mask.shape, h, w)
     assert mask.shape == (h,w)
 
     stitched_mask = CVMask(mask)
@@ -148,7 +150,7 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
       print('Saving image output to', cf.VISUAL_OUTPUT_PATH)
       visual_path = os.path.join(cf.VISUAL_OUTPUT_PATH, outname) + growth
       Image.fromarray(stitched_mask.plane_mask).save(visual_path + '_labeled.tiff', compression='tiff_lzw')
-      cvvisualize.save_mask_overlays(visual_path, nuclear_image, stitched_mask.plane_mask, stitched_mask.rois)
+      #cvvisualize.save_mask_overlays(visual_path, nuclear_image, stitched_mask.plane_mask, stitched_mask.rois)
     
     stitched_region = 'mosaic' in filename or 'stitched' in filename
     

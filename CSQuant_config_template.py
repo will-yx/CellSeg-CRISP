@@ -31,6 +31,11 @@ class CSConfig():
     
     # change these!
     IS_CODEX_OUTPUT = True
+    QUANT_SLICE = 0
+    
+    # quantification parameters:
+    # dilate nuclear mask before quantification step
+    GROWTH_PIXELS_PLANE = 0 # dilate cells on the plane_mask [0,1,1.5,2,2.5, ...]
     
     # adjacency quantification computes spillover between touching cells based on dilated cell masks
     output_adjacency_quant = True # 'uncompensated' and 'compensated' outputs.  The compensated version has reduced spillover between neighboring cells
@@ -49,8 +54,7 @@ class CSConfig():
     GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks [0,1,1.5,2,...] or negative
     
     # probably don't change this, except the valid image extensions when working with unique extensions
-    def __init__(self, input_path, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
-      if increase_factor is not None: self.INCREASE_FACTOR = increase_factor
+    def __init__(self, input_path, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
       if growth_plane is not None: self.GROWTH_PIXELS_PLANE = growth_plane
       if growth_quant_A is not None: self.GROWTH_PIXELS_QUANT_A = growth_quant_A
       if growth_quant_M is not None: self.GROWTH_PIXELS_QUANT_M = growth_quant_M
@@ -78,11 +82,11 @@ class CSConfig():
       trymakedirs(self.QUANTIFICATION_OUTPUT_PATH + '/loose')
       trymakedirs(self.VISUAL_OUTPUT_PATH)
       
-      filename_filter = lambda filename: f'z{self.NUCLEAR_SLICE:02d}' in filename
+      filename_filter = lambda filename: f'z{self.QUANT_SLICE:02d}' in filename
       
       self.CHANNEL_NAMES = pd.read_csv(self.CHANNEL_PATH, sep='\t', header=None).values[:, 0]
       
-      VALID_IMAGE_EXTENSIONS = (f'_z{self.NUCLEAR_SLICE:02d}_cy{self.NUCLEAR_CYCLE:02d}_ch{self.NUCLEAR_CHANNEL:02d}.tif')
+      VALID_IMAGE_EXTENSIONS = (f'_z{self.QUANT_SLICE:02d}_cy01_ch01.tif')
       self.FILENAMES = sorted([f for f in os.listdir(self.DIRECTORY_PATH) if f.endswith(VALID_IMAGE_EXTENSIONS) and not f.startswith('.')])
       if len(self.FILENAMES) < 1:
         raise NameError("No image files found.  Make sure you are pointing to the right directory '{}'".format(self.DIRECTORY_PATH))

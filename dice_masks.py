@@ -140,7 +140,7 @@ def dispatch_jobs(d_in, d_out, joblist, gx, gy, border, max_threads=1):
     remainingtime0 = None
     while rs._number_left > 0 or not q.empty():
       try:
-        msg = q.get(True, 600)
+        msg = q.get(True, 30)
         if isinstance(msg, str):
           print(msg)
         else:
