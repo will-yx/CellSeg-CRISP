@@ -31,26 +31,6 @@ class CSConfig():
     
     # change these!
     IS_CODEX_OUTPUT = True
-    NUCLEAR_CHANNEL_NAME = 'DRAQ5'
-    NUCLEAR_CYCLE = 18
-    NUCLEAR_CHANNEL = 4
-    NUCLEAR_SLICE = 0
-    
-    if 0: # ADVANCED! compute a nuclear stain channel on-the-fly
-      # synthesized nuclear image = (DRAQ5 * 1.5) - (cy02_ch02 * 0.5)
-      synthesize_nuclear_image = lambda self, x: \
-      x[:,:,(self.NUCLEAR_CYCLE-1)*4+(self.NUCLEAR_CHANNEL-1)] * 1.5 - x[:,:,(2-1)*4+(2-1)] * 0.5
-    else:
-      synthesize_nuclear_image = None # to disable the synthesized nuclear image
-    
-    # nuclei detection parameters
-    BOOST = 1 # brightness multiplier for nuclear channel during segmentation
-    MIN_AREA = 40 # minimum area in pixels for a detected object to be kept
-    INCREASE_FACTOR = 3.0 # size scaling factor for object detection - increase if you have smaller cells or low magnification and vice-versa
-    
-    # quantification parameters:
-    # dilate nuclear mask before quantification step
-    GROWTH_PIXELS_PLANE = 0 # dilate cells on the plane_mask [0,1,1.5,2,2.5, ...]
     
     # adjacency quantification computes spillover between touching cells based on dilated cell masks
     output_adjacency_quant = True # 'uncompensated' and 'compensated' outputs.  The compensated version has reduced spillover between neighboring cells
@@ -69,21 +49,17 @@ class CSConfig():
     GROWTH_PIXELS_MASKS = 0 # initial erosion or dilation of masks [0,1,1.5,2,...] or negative
     
     # probably don't change this, except the valid image extensions when working with unique extensions
-    def __init__(self, input_path, increase_factor=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None, nuclear_cycle=None, nuclear_channel=None, nuclear_slice=None):
+    def __init__(self, input_path, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
       if increase_factor is not None: self.INCREASE_FACTOR = increase_factor
       if growth_plane is not None: self.GROWTH_PIXELS_PLANE = growth_plane
       if growth_quant_A is not None: self.GROWTH_PIXELS_QUANT_A = growth_quant_A
       if growth_quant_M is not None: self.GROWTH_PIXELS_QUANT_M = growth_quant_M
       if border_quant_M is not None: self.BORDER_PIXELS_QUANT_M = border_quant_M
       
-      if nuclear_cycle   is not None: self.NUCLEAR_CYCLE   = nuclear_cycle
-      if nuclear_channel is not None: self.NUCLEAR_CHANNEL = nuclear_channel
-      if nuclear_slice   is not None: self.NUCLEAR_SLICE   = nuclear_slice
-      
       if not os.path.exists(input_path):
         raise NameError("Error: input directory '{}' doesn't exist!".format(input_path))
       
-      output_path = os.path.join(input_path, 'processed/segm/segm-1')
+      output_path = os.path.join(input_path, 'processed/segm/segm-mask')
       
       self.DIRECTORY_PATH = os.path.join(input_path, 'stitched')
       self.CHANNEL_PATH = os.path.join(input_path, 'channelnames.txt')

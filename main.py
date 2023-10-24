@@ -20,12 +20,13 @@ import tifffile
 import json
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
 from timeit import default_timer as timer
 from time import sleep
+
+from skimage.io import imread
 
 def show(img):
   fig = plt.figure()
@@ -35,33 +36,23 @@ def show(img):
   ax.imshow(img, aspect='equal')
   plt.show()
 
-def main(indir, region_index=None, increase_factor=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
+def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_A=None, growth_quant_M=None, border_quant_M=None):
   print('Starting CellSeg-CRISP')
   
   sys.path.insert(0, indir)
-  from CellSeg_config import CSConfig
+  from CSQuant_config import CSConfig
   
-  physical_devices = tf.config.experimental.list_physical_devices('GPU') 
-  try:
-    for dev in physical_devices:
-      tf.config.experimental.set_memory_growth(dev, True) 
-  except: # Invalid device or cannot modify virtual devices once initialized. 
-    pass
-  
-  os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-  tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
-  
-  cf = CSConfig(indir, increase_factor, growth_plane, growth_quant_A, growth_quant_M, border_quant_M)
+  cf = CSConfig(indir, growth_plane, growth_quant_A, growth_quant_M, border_quant_M)
   ch_per_cy = getattr(cf, 'CH_PER_CY', 4)
   
-  print('Initializing CVSegmenter at', cf.DIRECTORY_PATH)
+  #print('Initializing CVSegmenter at', cf.DIRECTORY_PATH)
   
   stitcher = CVMaskStitcher(overlap=cf.OVERLAP, min_area=cf.MIN_AREA)
   
   if cf.OUTPUT_METHOD not in ['imagej_text_file', 'statistics', 'images', 'all']:
     raise NameError('Output method is not supported.  Check the OUTPUT_METHOD variable in CellSeg_config.py.')
   
-  growth = '_us{:.1f}_grow{:.1f}x{:.1f}x{:.1f}b{:.1f}'.format(cf.INCREASE_FACTOR, cf.GROWTH_PIXELS_MASKS, cf.GROWTH_PIXELS_PLANE, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
+  growth = '_grow{:.1f}x{:.1f}x{:.1f}b{:.1f}'.format(cf.GROWTH_PIXELS_PLANE, cf.GROWTH_PIXELS_QUANT_A, cf.GROWTH_PIXELS_QUANT_M, cf.BORDER_PIXELS_QUANT_M)
   
   if region_index is not None and cf.FILENAMES:
     cf.FILENAMES = [cf.FILENAMES[region_index]] if region_index < len(cf.FILENAMES) else []
@@ -104,76 +95,31 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     
     print(f'Image shape: {image.shape}')
     
-    if cf.synthesize_nuclear_image:
-      print('Using a synthesized nuclear image for segmentation')
-      nuclear_index = -1
-      
-      nuclear_image = np.clip(cf.synthesize_nuclear_image(image), 0, np.iinfo(image.dtype).max).astype(image.dtype)
-      nuclear_image = np.expand_dims(skimage.img_as_ubyte(nuclear_image), axis=2)[:,:,[0,0,0]] # make RGB
-      nuclear_image = cvutils.boost_image(nuclear_image, cf.BOOST)
-    else:
-      if cf.IS_CODEX_OUTPUT:
-        print('Using channel', cf.NUCLEAR_CHANNEL_NAME, 'from', len(cf.CHANNEL_NAMES), 'total to segment on')
-        print('Channel names:')
-        print(cf.CHANNEL_NAMES)
-      
-      nuclear_index = cvutils.get_channel_index(cf.NUCLEAR_CHANNEL_NAME, cf.CHANNEL_NAMES) if cf.N_DIMS in [3,4] else 0
-      
-      print(f'Using channel {nuclear_index+1} as nuclear image')
-      nuclear_image = cvutils.get_nuclear_image(image, nuclear_index=nuclear_index)
-      nuclear_image = cvutils.boost_image(nuclear_image, cf.BOOST)
-    
-    h, w = nuclear_image.shape[:2]
+    h, w = image.shape[:2]
     nc = image.shape[2] if cf.N_DIMS > 2 else 1
     print(image.shape)
     print(len(cf.CHANNEL_NAMES))
     assert(len(cf.CHANNEL_NAMES) == nc)
     
     rundir = os.path.basename(os.path.normpath(indir))
-    data_cache_file = f'CellSeg cache/{rundir}_{filename}_{h}x{w}_n{nuclear_index}_if{cf.INCREASE_FACTOR:.1f}_ma{cf.MIN_AREA}_gm{cf.GROWTH_PIXELS_MASKS}.npz'
-    #data_cache_file = None
+    if os.path.isfile(os.path.join(indir, 'experiment.json')):
+      with open(os.path.join(indir, 'experiment.json')) as json_file:
+        run_name = json.load(json_file)['name']
+        outname = '{run_name}_reg{:03d}'.format(run_name, region_index+1)
+
+    mask_cache_file = f'{mask_dir}/{outname}.npz'
+    mask_tif_file = f'{mask_dir}/{outname}.tif'
     
-    if data_cache_file and os.path.exists(data_cache_file):
-      with np.load(data_cache_file) as data_cached:
+    if mask_cache_file and os.path.exists(mask_cache_file):
+      with np.load(mask_cache_file) as data_cached:
         mask = data_cached['data']
-        print(f'\nLoaded cell masks from cache file: {data_cache_file}')
+        print(f'\nLoaded cell masks from cache file: {mask_cache_file}')
+    elif mask_tif_file and os.path.exists(mask_tif_file):
+      mask = imread(mask_tif_file)      
     else:
-      print('\nSegmenting with CellSeg-CRISP:', filename); t0=timer()
-      
-      from numba import cuda 
-      cuda.get_current_device().reset()
-      
-      MODEL_PATH = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'src', 'modelFiles', 'final_weights.h5')
-      
-      segmenter = CVSegmenter(
-        cf.SHAPE,
-        MODEL_PATH,
-        cf.OVERLAP,
-        cf.INCREASE_FACTOR,
-        cf.MIN_AREA
-      )
-      
-      rois, masks, scores, rows, cols = segmenter.segment_image(nuclear_image)
-      
-      del segmenter.model
-      del segmenter
-      
-      tf.keras.backend.clear_session()
-      cuda.get_current_device().reset()
-      
-      print(f'Detect cells: {timer()-t0:.1f}s'); t0=timer()
-      
-      if cf.GROWTH_PIXELS_MASKS:
-        print(f'Growing each cell by {cf.GROWTH_PIXELS_MASKS} pixels')
-        cvutils.dilate_masks(rois, masks, scores, h, w, rows, cols, cf.OVERLAP, cf.GROWTH_PIXELS_MASKS)
-      
-      mask = stitcher.stitch_masks_plane(rois, masks, scores, rows, cols, h, w)
-      
-      if data_cache_file:
-        if not os.path.exists('CellSeg cache'): os.makedirs('CellSeg cache')
-        np.savez_compressed(data_cache_file, data=mask)
-        print(f'Saved detected nuclei to cache file:\n  {data_cache_file}')
-    
+      print('\nUnable to find mask file:', filename);
+    assert mask.shape == (h,w)
+
     stitched_mask = CVMask(mask)
     
     n = stitched_mask.n_instances
@@ -197,18 +143,6 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
     if not os.path.exists(cf.QUANTIFICATION_OUTPUT_PATH): os.makedirs(cf.QUANTIFICATION_OUTPUT_PATH)
     
     outname = filename[:-4] if filename.endswith('.tif') else filename
-    if os.path.isfile(os.path.join(indir, 'experiment.json')):
-      with open(os.path.join(indir, 'experiment.json')) as json_file:
-        run_name = json.load(json_file)['name']
-        outname = '{}_reg{:03d}'.format(run_name, region_index+1)
-    
-    if cf.OUTPUT_METHOD == 'imagej_text_file' or cf.OUTPUT_METHOD == 'all' and False:
-      print('Saving coordinates for ImageJ:', filename)
-      print('I have not verified that this output is correct.  Check it before running this')
-      seriously_i_have_not_checked_the_results_at_all
-      
-      new_path = os.path.join(cf.IMAGEJ_OUTPUT_PATH, (outname + '-coords.txt'))
-      stitched_mask.output_to_file(new_path)
     
     if cf.OUTPUT_METHOD == 'images' or cf.OUTPUT_METHOD == 'all':
       print('Saving image output to', cf.VISUAL_OUTPUT_PATH)
@@ -237,18 +171,6 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
       
       centroids = stitched_mask.centroids
       xys = np.fliplr(np.around(centroids))
-      
-      if 0: # Estimate tissue foldedness
-        from fold_eval import generate_folded_image
-        
-        t0 = timer()
-        ds = int(50 / (cf.INCREASE_FACTOR or 2))
-        folded = generate_folded_image(image, ds)
-        if cf.OUTPUT_METHOD == 'images' or cf.OUTPUT_METHOD == 'all':
-          Image.fromarray(folded).save(visual_path + f'_folds_ds{ds:02d}.png')
-        image = np.concatenate([image, folded[:,:,None]], axis=-1)
-        
-        print(f'Estimate tissue foldedness: {timer()-t0:.1f}s'); t0=timer()
       
       if cf.output_adjacency_quant:
         t0 = timer()
