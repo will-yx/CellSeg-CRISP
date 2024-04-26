@@ -290,6 +290,10 @@ def meta_from_image(filename, filter=None):
     ext = 'tif'
     read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
     image = np.array(read_method(filename, load=False))
+  if '/postprocessed/' in path:
+    ext = 'tif'
+    read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
+    image = np.array(read_method(filename, load=False))
   elif '/tiles/' in path:
     ext = 'tif'
     read_method = lambda f, **kw: tiles_folder_read_method(f, **kw, filter=filter)
