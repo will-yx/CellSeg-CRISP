@@ -140,7 +140,7 @@ def dispatch_jobs(d_in, d_out, joblist, gx, gy, border, max_threads=1):
     remainingtime0 = None
     while rs._number_left > 0 or not q.empty():
       try:
-        msg = q.get(True, 600)
+        msg = q.get(True, 100)
         if isinstance(msg, str):
           print(msg)
         else:
@@ -182,8 +182,10 @@ def dispatch_jobs(d_in, d_out, joblist, gx, gy, border, max_threads=1):
 
 def main(indir, region=None, config=None):
   config = config or toml.load(os.path.join(indir, 'CRISP_config.toml'))
-  
-  outdir = os.path.join(indir, 'processed/segm/segm-1/masks')
+  sys.path.insert(0, indir)
+  from CellSeg_config import CSConfig
+  cf = CSConfig(indir)
+  outdir = cf.VISUAL_OUTPUT_PATH or os.path.join(indir, 'processed/segm/segm-1/masks')
   
   gx   = config['dimensions']['gx']
   gy   = config['dimensions']['gy']
