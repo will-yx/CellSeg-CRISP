@@ -27,8 +27,6 @@ if __name__ == '__main__':
   __spec__ = None
   
   if 1:
-    run('N:/CODEX processed/20211221_cartilage_final_1_20220126')
-    run('N:/CODEX processed/20211224_cartilage_final_2_20220126')
-    run('N:/CODEX processed/20211227_cartilage_final_3_20220126')
-
-    
+   
+    run('N:\\CODEX processed\\240626_GNE_SA15')
+ 

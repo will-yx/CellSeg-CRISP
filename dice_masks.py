@@ -4,7 +4,7 @@ import multiprocessing.pool
 from ctypes import *
 from _ctypes import FreeLibrary
 
-import os
+import os, sys
 import shutil
 import itertools
 import numpy as np
@@ -104,7 +104,7 @@ def process_jobs(args):
       else: out.put(f'{tid}> error processing image (code: {status})!')
       
       if status == 0: break
-      if attempts > 0: sleep(30)
+      if attempts > 0: sleep(10)
      
     out.put((status, tid, job))
     if status: break
@@ -140,7 +140,7 @@ def dispatch_jobs(d_in, d_out, joblist, gx, gy, border, max_threads=1):
     remainingtime0 = None
     while rs._number_left > 0 or not q.empty():
       try:
-        msg = q.get(True, 100)
+        msg = q.get(True, 30)
         if isinstance(msg, str):
           print(msg)
         else:
