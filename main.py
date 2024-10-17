@@ -74,6 +74,9 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
           
           print('Using DRC values:', drc0, drc1, drca)
         except: pass
+    if cf.DIRECTORY_PATH.endswith('postprocessed'):
+        print('Using postprocessed default drc values')
+        drc0, drc1, drca = 60000, 1000000, 779.72009277
     
     image = np.array(cf.READ_METHOD(path))
     
