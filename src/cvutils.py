@@ -29,7 +29,7 @@ SIXTEEN_BIT_MAX = 65535
 #  Packaged Segmenter
 ############################################################
 
-def drcu(image, drc0, drc1, drca):
+def drcu(image, drc0=60000, drc1=1000000, drca=779.72009277):
   assert(image.dtype == np.uint16)
   assert(drc0 < 65534)
   assert(drc1 > 65535)
@@ -41,7 +41,10 @@ def drcu(image, drc0, drc1, drca):
   c_drcu.argtypes = [POINTER(c_float), POINTER(c_ushort), c_size_t, c_float, c_float, c_float]
   
   img = np.ascontiguousarray(image)
-  out = np.ascontiguousarray(np.empty(img.shape, dtype=np.float32))
+  try:
+      out = np.ascontiguousarray(np.empty(img.shape, dtype=np.float32))
+  except:
+      out = np.memmap('./CellSeg cache/img.arr', dtype=np.float32, mode='w+', shape=(img.shape))
   c_drcu(out.ctypes.data_as(POINTER(c_float)), img.ctypes.data_as(POINTER(c_ushort)), img.size, drc0, drc1, drca)
   
   FreeLibrary(libSpaCE._handle)
@@ -287,6 +290,10 @@ def meta_from_image(filename, filter=None):
   
   path = os.path.normpath(filename).replace('\\','/')
   if '/stitched/' in path:
+    ext = 'tif'
+    read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
+    image = np.array(read_method(filename, load=False))
+  elif '/postprocessed/' in path:
     ext = 'tif'
     read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
     image = np.array(read_method(filename, load=False))

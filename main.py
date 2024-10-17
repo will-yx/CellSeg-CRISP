@@ -266,6 +266,9 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
         
         print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
     
+    if os.isfile("./CellSeg cache/img.arr"):
+        os.remove("./CellSeg cache/img.arr")
+    
     print('Total processing time for file {}: {:.1f}m'.format(filename, (timer()-t0_file) / 60));
 
 if __name__ == "__main__":

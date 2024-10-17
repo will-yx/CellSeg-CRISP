@@ -4,7 +4,7 @@ import multiprocessing.pool
 from ctypes import *
 from _ctypes import FreeLibrary
 
-import os
+import os, sys
 import shutil
 import itertools
 import numpy as np
@@ -60,7 +60,7 @@ def free_libs(libs):
 def dice_mask(out, tid, job, indir, outdir, gx, gy, border):
   reg, cy, ch, sl = job
   
-  masks = glob(os.path.join(indir, f'*reg{reg:03d}*masks.tiff'))
+  masks = glob(os.path.join(indir, f'*reg{reg:03d}*masks.tif'))
   if len(masks) != 1:
     out.put(f'{tid}> error: expected 1 image, but found {len(masks)}')
     return 1
@@ -104,7 +104,7 @@ def process_jobs(args):
       else: out.put(f'{tid}> error processing image (code: {status})!')
       
       if status == 0: break
-      if attempts > 0: sleep(30)
+      if attempts > 0: sleep(10)
      
     out.put((status, tid, job))
     if status: break
@@ -182,8 +182,10 @@ def dispatch_jobs(d_in, d_out, joblist, gx, gy, border, max_threads=1):
 
 def main(indir, region=None, config=None):
   config = config or toml.load(os.path.join(indir, 'CRISP_config.toml'))
-  
-  outdir = os.path.join(indir, 'processed/segm/segm-1/masks')
+  sys.path.insert(0, indir)
+  from CellSeg_config import CSConfig
+  cf = CSConfig(indir)
+  outdir = cf.VISUAL_OUTPUT_PATH or os.path.join(indir, 'processed/segm/segm-1/masks')
   
   gx   = config['dimensions']['gx']
   gy   = config['dimensions']['gy']
