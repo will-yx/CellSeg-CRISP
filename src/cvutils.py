@@ -41,7 +41,10 @@ def drcu(image, drc0=60000, drc1=1000000, drca=779.72009277):
   c_drcu.argtypes = [POINTER(c_float), POINTER(c_ushort), c_size_t, c_float, c_float, c_float]
   
   img = np.ascontiguousarray(image)
-  out = np.ascontiguousarray(np.empty(img.shape, dtype=np.float32))
+  try:
+      out = np.ascontiguousarray(np.empty(img.shape, dtype=np.float32))
+  except:
+      out = np.memmap('./CellSeg cache/img.arr', dtype=np.float32, mode='w+', shape=(img.shape))
   c_drcu(out.ctypes.data_as(POINTER(c_float)), img.ctypes.data_as(POINTER(c_ushort)), img.size, drc0, drc1, drca)
   
   FreeLibrary(libSpaCE._handle)

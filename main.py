@@ -344,6 +344,9 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'tight', outname + '_tight.fcs'), data_T_f, cols_f, split=':')
         
         print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
+        
+    if os.isfile("./CellSeg cache/img.arr"):
+        os.remove("./CellSeg cache/img.arr")
     
     print('Total processing time for file {}: {:.1f}m'.format(filename, (timer()-t0_file) / 60));
 
