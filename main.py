@@ -91,7 +91,7 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         print('Using postprocessed default drc values')
         drc0, drc1, drca = 60000, 1000000, 779.72009277
     
-    image = np.array(cf.READ_METHOD(path))
+    image = cf.READ_METHOD(path)
     
     print('Load image: {:.1f}s'.format(timer()-t0)); t0=timer()
     
@@ -344,6 +344,9 @@ def main(indir, region_index=None, increase_factor=None, growth_plane=None, grow
         write_fcs(os.path.join(cf.QUANTIFICATION_OUTPUT_PATH, 'tight', outname + '_tight.fcs'), data_T_f, cols_f, split=':')
         
         print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
+        
+    if os.path.isfile("./CellSeg cache/load.arr"):
+        os.remove("./CellSeg cache/load.arr")
         
     if os.path.isfile("./CellSeg cache/img.arr"):
         os.remove("./CellSeg cache/img.arr")

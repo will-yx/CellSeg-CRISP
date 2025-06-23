@@ -3,3 +3,4 @@ __pycache__/
 logs/
 *.npz
 run_CellSeg-CRISP.py
+CellSeg cache/img.arr

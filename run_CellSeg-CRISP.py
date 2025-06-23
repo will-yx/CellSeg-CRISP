@@ -27,6 +27,7 @@ if __name__ == '__main__':
   __spec__ = None
   
   if 1:
-   
-    run('N:\\CODEX processed\\240626_GNE_SA15')
+ 
+    run(r'N:\CODEX processed\250410_Benchmark3_FF_SB05')
+    #run('N:\\CODEX processed\\20250306_Colas_116_bis')
  

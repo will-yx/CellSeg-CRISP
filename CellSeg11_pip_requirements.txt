@@ -5,7 +5,7 @@ colorama==0.4.4
 cycler==0.11.0
 decorator==5.1.1
 fonttools==4.28.5
-h5py==2.10.0
+h5py
 humanfriendly>=10.0
 imagecodecs==2021.11.20
 imageio==2.13.5
