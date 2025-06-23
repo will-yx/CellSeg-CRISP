@@ -25,8 +25,11 @@ if __name__ == '__main__':
   __spec__ = None
   
   if 1:
-    mask_dir = r'N:\CODEX processed\250521_SA31_CTCF_13wks\fiber_masks\RGBmask'
-    processed_dir = r'N:\CODEX processed\250521_SA31_CTCF_13wks'
-    run(mask_dir, processed_dir)
+    dirs = ['250218_YoungBM_Depl_Test46','250212_AgedBM_Depl_Test46','250227_AgedBM_Depl_2_Test46','250312_AgedBM_Depl_3_Test46.1','250414_AgedBM_Depl_4.2_test46.1']
+    
+    for d in dirs:    
+      mask_dir = f'N:/CODEX processed/{d}/postprocessed/instan-segm'
+      processed_dir = f'N:/CODEX processed/{d}'
+      run(mask_dir, processed_dir)
 
     

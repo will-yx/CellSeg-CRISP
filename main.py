@@ -6,13 +6,13 @@
 # as quantifications, and outputted per file for other output methods.  This file can be run by itself by
 # invoking python main.py or the main function imported.
 
-import os
+import os, glob
 import sys
-from src.cvsegmenter import CVSegmenter
-from src.cvstitch_plane import CVMaskStitcher
+#from src.cvsegmenter import CVSegmenter
+#from src.cvstitch_plane import CVMaskStitcher
 from src.cvmask import CVMask
 from src import cvutils
-from src import cvvisualize
+#from src import cvvisualize
 from src.my_fcswrite import write_fcs
 from PIL import Image
 import skimage
@@ -105,11 +105,11 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
     if os.path.isfile(os.path.join(indir, 'experiment.json')):
       with open(os.path.join(indir, 'experiment.json')) as json_file:
         run_name = json.load(json_file)['name']
-        outname = '{}_reg{:03d}'.format(run_name, region_index+1)
-    else: outname = '{}_reg{:03d}'.format(rundir, region_index+1)
+        outname = '*region{:03d}*labeled'.format(region_index+1)
+    else: outname = '*region{:03d}*labeled'.format(region_index+1)
 
     mask_cache_file = f'{mask_dir}/{outname}.npz'
-    mask_tif_file = f'{mask_dir}/{outname}.tif'
+    mask_tif_file = glob.glob(f'{mask_dir}/{outname}.tif')[0]
     
     print(f"searching mask directory for {mask_cache_file} or {mask_tif_file}")
     
@@ -123,6 +123,28 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
     else:
       print('\nUnable to find mask file:', mask_tif_file);
     print(mask.shape, h, w)
+    
+    if mask.shape != (h,w):
+        hc, wc = mask.shape
+        gy = int(hc // 1008)
+        gx = int(wc // 1344)
+        
+        th, tw = hc//gy, wc//gx
+        htrim, wtrim = th*gy, tw*gx
+        
+        while(htrim % (gy*2)):
+          th = htrim//gy
+          htrim -= 1
+        
+        while(wtrim % (gx*2)):
+          tw = wtrim//gx
+          wtrim -= 1
+        
+        top  = (hc - th*gy) // 2; bottom = top  + th*gy
+        left = (wc - tw*gx) // 2; right  = left + tw*gx
+        
+        mask = mask[top:bottom,left:right]
+    
     assert mask.shape == (h,w)
 
     stitched_mask = CVMask(mask)
@@ -269,8 +291,10 @@ def CSquant(mask_dir, indir, region_index=None, growth_plane=None, growth_quant_
         
         print('Save measurements to csv and fcs: {:.1f}s'.format(timer()-t0)); t0=timer()
     
-    if os.path.isfile("./CellSeg cache/img.arr"):
-        os.remove("./CellSeg cache/img.arr")
+    if os.path.isfile("./CSQuant cache/load.arr"):
+        os.remove("./CSQuant cache/load.arr")
+    if os.path.isfile("./CSQuant cache/img.arr"):
+        os.remove("./CSQuant cache/img.arr")
     
     print('Total processing time for file {}: {:.1f}m'.format(filename, (timer()-t0_file) / 60));
 

@@ -44,7 +44,7 @@ def drcu(image, drc0=60000, drc1=1000000, drca=779.72009277):
   try:
       out = np.ascontiguousarray(np.empty(img.shape, dtype=np.float32))
   except:
-      out = np.memmap('./CellSeg cache/img.arr', dtype=np.float32, mode='w+', shape=(img.shape))
+      out = np.memmap('./CSQuant cache/img.arr', dtype=np.float32, mode='w+', shape=(img.shape))
   c_drcu(out.ctypes.data_as(POINTER(c_float)), img.ctypes.data_as(POINTER(c_ushort)), img.size, drc0, drc1, drca)
   
   FreeLibrary(libSpaCE._handle)
@@ -243,7 +243,66 @@ def stitched_folder_read_method(folder, prefix_length=17, load=True, filter=None
     print()
   
   return stack
+
+def stitched_folder_memmap_method(folder, prefix_length=17, load=True, filter=None):
+  filter = filter or (lambda *_: True)
   
+  if folder.endswith('.tif'):
+    folder, fname = os.path.split(folder)
+    prefix = fname[0:prefix_length]
+    files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and f.startswith(prefix) and filter(f)])
+  else:
+    files = sorted([f for f in os.listdir(folder) if f.endswith('.tif') and not f.startswith('.') and filter(f)])
+
+  print('Loading {} images with memmap in CSQuant cache'.format(len(files)))
+  
+  first = skimage.io.imread(os.path.join(folder,files[0]))
+  
+  stack = np.memmap('X:/temp/load.arr', dtype=first.dtype, mode='w+', shape=(first.shape[0:2] + (len(files),)))
+  if load:
+    print('Loading...')
+    for c, fname in enumerate(files):
+      print('  {}'.format(fname))
+      t_img = skimage.io.imread(os.path.join(folder,fname))
+      print(t_img[0,:10])
+      print('Write')
+      stack[:,:,c] = t_img[:]
+      print('Flush')
+      stack.flush()
+  print()
+    
+  def crop_mosaic(imgstack, gy=None, gx=None):
+    # trim the mosaic so the output tiles are an equal and even size (w and h are a multiple of 2)
+    
+    hc, wc = imgstack.shape[0:2]    
+     
+    if gy is None: gy = int(hc // 1008)
+    if gx is None: gx = int(wc // 1344)
+    
+    th, tw = hc//gy, wc//gx
+    htrim, wtrim = th*gy, tw*gx
+    
+    while(htrim % (gy*2)):
+      th = htrim//gy
+      htrim -= 1
+    
+    while(wtrim % (gx*2)):
+      tw = wtrim//gx
+      wtrim -= 1
+    
+    top  = (hc - th*gy) // 2; bottom = top  + th*gy
+    left = (wc - tw*gx) // 2; right  = left + tw*gx
+    
+    return imgstack[top:bottom,left:right,:]
+  
+  if load:
+    print('  input shape:', stack.shape)
+    stack = crop_mosaic(stack)
+    print('cropped shape:', stack.shape)
+    print()
+  
+  return stack
+
 def tiles_folder_read_method(folder, load=True, filter=None):
   filter = filter or (lambda *_: True)
   
@@ -292,7 +351,11 @@ def meta_from_image(filename, filter=None):
   if '/stitched/' in path:
     ext = 'tif'
     read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
-    image = np.array(read_method(filename, load=False))
+    try: image = np.array(read_method(filename, load=False))
+    except: 
+        print("using memmap to store image data")
+        read_method = lambda f, **kw: stitched_folder_memmap_method(f, **kw, filter=filter)
+        image = stitched_folder_memmap_method(filename, load=False)
   elif '/postprocessed/' in path:
     ext = 'tif'
     read_method = lambda f, **kw: stitched_folder_read_method(f, **kw, filter=filter)
